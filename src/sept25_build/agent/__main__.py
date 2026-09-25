@@ -3,19 +3,18 @@
     uv run python -m sept25_build.agent              # one live tick against RawTree
     uv run python -m sept25_build.agent --fixtures   # replay fixtures/snapshots in memory (regex, no LLM calls)
     uv run python -m sept25_build.agent --fixtures --llm     # same with Liquid (~10 OpenRouter requests)
-    uv run python -m sept25_build.agent --fixtures --write   # same, but also write results to RawTree
 """
 
 import argparse
 from pathlib import Path
 
 from ..contracts import Snapshot
-from . import MemoryStore, RawTreeStore, llm, run_tick
+from . import MemoryStore, llm, run_tick
 
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "snapshots"
 
 
-def replay(write: bool, use_llm: bool) -> None:
+def replay(use_llm: bool) -> None:
     if not use_llm:
         llm.disable()  # OpenRouter free tier is ~50 requests/day; opt in with --llm
     store = MemoryStore()
@@ -44,19 +43,15 @@ def replay(write: bool, use_llm: bool) -> None:
     mirror_card = store.cards.get("tinybird-mirror")
     if mirror_card:
         print(f"\nmirror notes:\n{mirror_card.notes}")
-    if write:
-        RawTreeStore().write(list(store.cards.values()), store.alerts, store.ticks)
-        print("\nwritten to RawTree")
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--fixtures", action="store_true")
-    ap.add_argument("--write", action="store_true")
     ap.add_argument("--llm", action="store_true", help="use the real LLM in --fixtures (costs requests)")
     args = ap.parse_args()
     if args.fixtures:
-        replay(args.write, args.llm)
+        replay(args.llm)
     else:
         for a in run_tick():
             print(f"{a.kind} {a.rule} {a.title}")

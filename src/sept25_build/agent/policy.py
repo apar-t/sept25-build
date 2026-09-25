@@ -1,45 +1,34 @@
-"""Deterministic parts of the agent: country normalization, R1-R3 checks, policy paragraph diffing.
+"""Deterministic parts of the agent: country checks, R1-R3 findings, policy sentence detection.
 
-The LLM only extracts facts from changed text. Deciding compliance is plain code, so the
-red/green verdict on stage never depends on a small model's mood.
+The LLM only judges the meaning of individual sentences. Deciding compliance is plain code, so
+the red/green verdict on stage never depends on a small model's mood.
 """
 
 import re
 
 from ..contracts import APPROVED_COUNTRIES, MAX_RETENTION_DAYS, Finding, StateCard, Subprocessor, sha
 
-_ALIASES = {
-    "us": "United States", "usa": "United States", "u.s.": "United States", "u.s.a.": "United States",
-    "united states of america": "United States", "america": "United States",
-    "uk": "United Kingdom", "u.k.": "United Kingdom", "great britain": "United Kingdom",
-    "england": "United Kingdom", "scotland": "United Kingdom", "wales": "United Kingdom",
-    "czechia": "Czech Republic", "the netherlands": "Netherlands", "holland": "Netherlands",
-    "deutschland": "Germany",
-}
-# Region words that mean "somewhere in the EU/EEA": approved by definition.
-_APPROVED_REGIONS = {"eu", "eea", "european union", "european economic area", "europe"}
-_APPROVED = {c.lower() for c in APPROVED_COUNTRIES}
-
-
-def countries(raw: str) -> list[str]:
-    """'US, Ireland and EU' -> ['United States', 'Ireland', 'EU']. Empty if nothing listed."""
-    parts = re.split(r",|;|/|\band\b|\bor\b|&|\(|\)", raw or "")
-    out = []
-    for p in parts:
-        p = p.strip().strip(".").strip()
-        if not p:
-            continue
-        key = p.lower()
-        if key in _APPROVED_REGIONS:
-            out.append("EU")
-        else:
-            out.append(_ALIASES.get(key) or (p.title() if p.islower() else p))
-    return out
+# R1 only fires when a country NOT on the approved list is named explicitly. Cities, regions,
+# "Global", "N/A" or a missing country are never flagged: a false red on a real vendor is worse
+# on stage than a missed edge case.
+_NOT_APPROVED = [
+    "Singapore", "India", "China", "Hong Kong", "Taiwan", "South Korea", "Korea", "Australia",
+    "New Zealand", "Israel", "Philippines", "Vietnam", "Indonesia", "Malaysia", "Thailand",
+    "Pakistan", "Bangladesh", "Sri Lanka", "Brazil", "Mexico", "Argentina", "Chile", "Colombia",
+    "Peru", "Uruguay", "Costa Rica", "South Africa", "Nigeria", "Kenya", "Egypt", "Morocco",
+    "Russia", "Ukraine", "Belarus", "Serbia", "Turkey", "Türkiye", "United Arab Emirates", "UAE",
+    "Saudi Arabia", "Qatar",
+]
+_APPROVED_LOWER = {c.lower() for c in APPROVED_COUNTRIES}
+_NOT_APPROVED_RE = [(c, re.compile(rf"(?<![a-z]){re.escape(c.lower())}(?![a-z])"))
+                    for c in _NOT_APPROVED if c.lower() not in _APPROVED_LOWER]
 
 
 def unapproved(sub: Subprocessor) -> list[str]:
-    """Countries of this sub-processor that are not on the approved list. Unknown country = not flagged."""
-    return [c for c in countries(sub.country) if c != "EU" and c.lower() not in _APPROVED]
+    """Non-approved countries explicitly named in this sub-processor's location."""
+    text = (sub.country or "").lower()
+    found = [c for c, pat in _NOT_APPROVED_RE if pat.search(text)]
+    return [c for c in found if not (c == "Korea" and "South Korea" in found)]
 
 
 def sub_key(sub: Subprocessor) -> str:
@@ -54,28 +43,13 @@ def para_hash(p: str) -> str:
     return sha(p.lower())
 
 
-_RELEVANT = re.compile(
-    r"train|machine learning|\bai\b|artificial intelligence|\bmodels?\b|retain|retention|delet|"
-    r"\b\d+\s*(day|month|year)s?\b", re.I)
-
-
-def relevant(paras: list[str], limit_chars: int = 6000) -> list[str]:
-    """Paragraphs that could mention training or retention, capped so the prompt stays small."""
-    out, n = [], 0
-    for p in paras:
-        if _RELEVANT.search(p) and n + len(p) <= limit_chars:
-            out.append(p)
-            n += len(p)
-    return out
-
-
 def findings(card: StateCard, snapshot_id: str, tick: int, previous: list[Finding]) -> list[Finding]:
     """Recompute open findings from the card's current facts. Keeps opened_tick for findings still open."""
     opened = {(f.rule, f.summary): f for f in previous}
     now = []
     for s in card.subprocessors:
         bad = unapproved(s)
-        if bad:
+        if bad and ("R1", f"{s.name} processes data in {', '.join(bad)} (not approved)") not in now:
             now.append(("R1", f"{s.name} processes data in {', '.join(bad)} (not approved)"))
     if card.training_on_customer_data is True:
         now.append(("R2", "Vendor terms allow training AI models on customer data"))
@@ -85,13 +59,22 @@ def findings(card: StateCard, snapshot_id: str, tick: int, previous: list[Findin
             for k in now]
 
 
-_NEGATION = re.compile(r"\b(not|never|no|don't|do not|does not|won't|will not)\b", re.I)
+# ---- policy sentences -------------------------------------------------------------------------
+
+_NEGATION = re.compile(r"\b(not|never|no|don't|do not|does not|won't|will not|without)\b", re.I)
+_CLAUSE_SPLIT = re.compile(r"\b(?:but|however|although|though|whereas|except)\b|;", re.I)
 _DURATION = re.compile(r"(\d+)\s*(day|week|month|year)s?", re.I)
 _UNIT_DAYS = {"day": 1, "week": 7, "month": 30, "year": 365}
 # "train" only counts near model words, so "we train our staff" doesn't turn a vendor red
 _TRAINING = re.compile(r"\btrain\w*\b.{0,80}\b(models?|machine learning|ml|ai|artificial intelligence|algorithms?)\b|"
                        r"\b(models?|machine learning|ml|ai|artificial intelligence)\b.{0,40}\btrain", re.I)
+# ...and only when the sentence is about the customer's data, not the vendor's own training data
+_CUSTOMER_DATA = re.compile(
+    r"\b(customer|your|user|client|personal|end[- ]user)s?'?\s+(data|content|information|inputs?|prompts?|files|materials)\b|"
+    r"\bcontent (?:you|that you) (?:submit|provide|upload)|\bdata (?:you|that you) (?:submit|provide|upload)", re.I)
 _RETENTION = re.compile(r"retain|retention|delet|stored? for|kept for|keep", re.I)
+# R3 is about customer data, not tax records, invoices or legal holds
+_RETENTION_EXCLUDE = re.compile(r"\b(tax|invoice|billing|accounting|financial records?|legal (?:hold|obligation|requirement)s?|audit)\b", re.I)
 
 
 def norm(text: str) -> str:
@@ -100,6 +83,10 @@ def norm(text: str) -> str:
 
 def sentences(paragraph: str) -> list[str]:
     return [s for s in re.split(r"(?<=[.!?])\s+", paragraph) if s.strip()]
+
+
+def sentence_key(kind: str, sentence: str) -> str:
+    return f"{kind}:{sha(norm(sentence))}"
 
 
 def to_days(value: float | int | None, unit: str | None) -> int | None:
@@ -114,28 +101,27 @@ def duration_days(sentence: str) -> int | None:
     return max(found) if found else None
 
 
-def training_sentences(paras: list[str]) -> list[str]:
-    return [s for p in paras for s in sentences(p) if _TRAINING.search(s)]
-
-
-def retention_sentences(paras: list[str]) -> list[str]:
-    return [s for p in paras for s in sentences(p) if _RETENTION.search(s) and _DURATION.search(s)]
+def candidates(paras: list[str]) -> list[tuple[str, str]]:
+    """Every (kind, sentence) in the whole policy that could matter for R2 or R3. Deduplicated."""
+    out, seen = [], set()
+    for p in paras:
+        for s in sentences(p):
+            if not _CUSTOMER_DATA.search(s):
+                continue
+            kinds = []
+            if _TRAINING.search(s):
+                kinds.append("training")
+            if _RETENTION.search(s) and _DURATION.search(s) and not _RETENTION_EXCLUDE.search(s):
+                kinds.append("retention")
+            for k in kinds:
+                if sentence_key(k, s) not in seen:
+                    seen.add(sentence_key(k, s))
+                    out.append((k, s))
+    return out
 
 
 def trains(sentence: str) -> bool:
-    return not _NEGATION.search(sentence)
-
-
-def heuristic_facts(paras: list[str]) -> dict:
-    """Regex fallback used only when the LLM is unavailable or returns junk."""
-    facts = {"training_on_customer_data": None, "training_quote": "", "retention_days": None, "retention_quote": ""}
-    for p in paras:
-        for sent in sentences(p):
-            if _TRAINING.search(sent) and not facts["training_quote"]:
-                facts["training_on_customer_data"] = not _NEGATION.search(sent)
-                facts["training_quote"] = sent
-            if _RETENTION.search(sent) and not facts["retention_quote"]:
-                days = duration_days(sent)
-                if days is not None:
-                    facts["retention_days"], facts["retention_quote"] = days, sent
-    return facts
+    """Regex polarity: look only at the clause that mentions training, so
+    "we never sell your data but may use it to train our models" reads as allowing training."""
+    clauses = [c for c in _CLAUSE_SPLIT.split(sentence) if c and re.search(r"train", c, re.I)] or [sentence]
+    return any(not _NEGATION.search(c) for c in clauses)

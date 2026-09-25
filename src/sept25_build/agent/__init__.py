@@ -21,7 +21,11 @@ def run_tick(store=None, run_id: str = "live") -> list[Alert]:
         card = cards.get(snap.vendor)
         if card and card.last_snapshot_id == snap.snapshot_id:
             continue  # nothing new for this vendor since last tick
-        new, alerts, log = step(card, snap, tick, run_id)
+        try:
+            new, alerts, log = step(card, snap, tick, run_id)
+        except Exception as e:  # one bad vendor must not stop the others
+            print(f"agent: skipped {snap.vendor} this tick: {type(e).__name__}: {e}")
+            continue
         naive = TickLog(run_id=run_id, tick=tick, agent="naive", vendor=snap.vendor,
                         input_tokens=naive_tokens(store.last_naive_total(snap.vendor), snap, card is None))
         out_cards.append(new)

@@ -27,8 +27,8 @@ else:
     BASE_URL = LOCAL_URL
     MODEL = "LFM2.5-2.6B"
     _key = os.environ.get("LFM_API_KEY", "local")
-_client = OpenAI(base_url=BASE_URL, api_key=_key or "missing", timeout=90, max_retries=1)
-_rate_limited = False  # once OpenRouter says 429, stop calling it for this process
+_client = OpenAI(base_url=BASE_URL, api_key=_key or "missing", timeout=30, max_retries=0)
+_rate_limited = False  # after a 429 or timeout, stop calling the backend for this process (circuit breaker)
 _disabled = False      # set by disable(): fixture replays use the regex path to save quota
 
 
@@ -40,8 +40,10 @@ def disable() -> None:
 def available() -> bool:
     if _disabled:
         return False
+    if _rate_limited:
+        return False
     if BACKEND == "openrouter":
-        return bool(_key) and not _rate_limited
+        return bool(_key)
     try:
         return requests.get(LOCAL_URL.removesuffix("/v1") + "/health", timeout=5).ok
     except requests.RequestException:
@@ -78,6 +80,9 @@ def json_call(system: str, user: str, schema: dict, max_tokens: int = 2500) -> t
     except openai.RateLimitError as e:
         _rate_limited = True
         raise RuntimeError(f"{BACKEND} rate limit: {e}") from e
+    except (openai.APITimeoutError, openai.APIConnectionError) as e:
+        _rate_limited = True  # a hung backend would otherwise stall every vendor for 30s
+        raise RuntimeError(f"{BACKEND} unreachable: {e}") from e
     except openai.APIError as e:
         raise RuntimeError(f"{BACKEND} error: {e}") from e
     if not r.choices:

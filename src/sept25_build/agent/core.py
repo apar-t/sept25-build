@@ -7,85 +7,84 @@ the same size on tick 5 and tick 5,000. Full snapshots live in RawTree, never in
 import json
 import time
 
-from ..contracts import COMPANY, RULES, Alert, Snapshot, StateCard, Subprocessor, TickLog
+from ..contracts import COMPANY, RULES, Alert, Snapshot, StateCard, Subprocessor, TickLog, sha
 from . import llm, policy
 
 SYSTEM = (
-    "You read changed paragraphs from a vendor's data-processing terms. Extract facts ONLY from "
-    "these paragraphs. Copy quotes word for word from the paragraphs. If a paragraph does not "
-    "mention a fact, return null and an empty quote for it."
+    "You judge numbered sentences from a vendor's data-processing terms. For each sentence answer:\n"
+    "- allows_training: true if it says the vendor MAY use customer data to train AI/ML models, "
+    "false if it says it will NOT, null if it is not about training on customer data.\n"
+    "- customer_data_retention: true if it states how long CUSTOMER data is kept or when it is deleted, "
+    "false otherwise (tax records, logs, invoices, notice periods are false).\n"
+    "Judge each sentence on its own words only."
 )
-FACTS_SCHEMA = {
+VERDICT_SCHEMA = {
     "type": "object",
-    "properties": {
-        "training_on_customer_data": {"type": ["boolean", "null"],
-                                      "description": "true if the vendor may use customer data to train AI/ML models, "
-                                                     "false if it says it won't, null if not mentioned"},
-        "training_quote": {"type": "string", "description": "the sentence that says it, copied exactly, or empty"},
-        "retention_quote": {"type": "string",
-                            "description": "the sentence saying how long customer data is kept, copied exactly, or empty"},
-        "is_material": {"type": "boolean",
-                        "description": "false if the change is cosmetic (dates, formatting, same meaning)"},
-        "reason": {"type": "string", "description": "one short sentence"},
-    },
-    "required": ["training_on_customer_data", "training_quote", "retention_quote", "is_material", "reason"],
+    "properties": {"items": {"type": "array", "items": {
+        "type": "object",
+        "properties": {"i": {"type": "integer"},
+                       "allows_training": {"type": ["boolean", "null"]},
+                       "customer_data_retention": {"type": "boolean"}},
+        "required": ["i", "allows_training", "customer_data_retention"]}}},
+    "required": ["items"],
 }
+LLM_BATCH = 12   # most new sentences judged per call; the rest use the regex verdict
 NOTES_MAX = 700
 NOTES_KEEP = 5
 
 
-def _ground(quote: str, changed: list[str]) -> str:
-    """The full sentence in `changed` that contains `quote`, or "" if the model made it up."""
-    q = policy.norm(quote)
-    if len(q) < 12:
-        return ""
-    for p in changed:
-        for sent in policy.sentences(p):
-            if q in policy.norm(sent) or policy.norm(sent) in q:
-                return sent
-    return ""
-
-
-def _extract(card: StateCard, changed: list[str]) -> tuple[dict, dict, str]:
-    """What does the changed text mean for R2 (training) and R3 (retention)?
+def _judge(new_sents: list[tuple[str, str]]) -> tuple[dict[str, dict], dict, str]:
+    """Verdicts for policy sentences the agent hasn't seen before.
 
     Division of labour, because a 2.6B model echoes context and fumbles units:
-      - regex decides WHICH sentences can be about training/retention at all (no candidate = no fact)
-      - Liquid decides the meaning of those sentences (e.g. "we don't sell data, but may train on it")
-      - its answer only counts if its quote is one of those candidate sentences; otherwise regex decides
-      - retention days are always parsed from the sentence in code
+      - regex decides WHICH sentences can matter (policy.candidates); no candidate, no call
+      - Liquid decides what each one means, answering by sentence number (nothing to copy or invent)
+      - regex polarity is the fallback per sentence; retention days are always parsed in code
     """
-    facts = {"training_on_customer_data": None, "training_quote": "", "retention_days": None,
-             "retention_quote": "", "reason": ""}
-    t_cands, r_cands = policy.training_sentences(changed), policy.retention_sentences(changed)
     usage, source, out = {"input_tokens": 0, "output_tokens": 0}, "regex", {}
-    if not t_cands and not r_cands:
-        return facts | {"reason": "no training/retention sentence changed"}, usage, "gate"  # 0 LLM calls
-    if llm.available():
-        user = f"Changed paragraphs in {card.display_name}'s terms:\n\n" + "\n\n".join(f"- {p}" for p in changed)
+    batch = new_sents[:LLM_BATCH]
+    if batch and llm.available():
+        user = "\n".join(f"{i}. {s}" for i, (_, s) in enumerate(batch))
         for _ in range(2):
             try:
-                out, usage = llm.json_call(SYSTEM, user, FACTS_SCHEMA)
+                raw, usage = llm.json_call(SYSTEM, user, VERDICT_SCHEMA)
+                out = {int(it["i"]): it for it in raw.get("items", []) if isinstance(it, dict) and "i" in it}
                 source = "liquid"
                 break
-            except (ValueError, json.JSONDecodeError):
+            except (ValueError, KeyError, TypeError, json.JSONDecodeError):
                 continue
-            except RuntimeError as e:  # rate limit / backend down: don't burn more requests
-                facts["reason"] = f"LLM unavailable: {e}"[:200]
+            except RuntimeError:  # rate limit / timeout: don't burn more requests
                 break
-    facts["reason"] = facts["reason"] or out.get("reason") or ("regex" if source == "regex" else "")
-
-    if t_cands:
-        t_sent = _ground(out.get("training_quote") or "", changed)
-        if t_sent in t_cands and isinstance(out.get("training_on_customer_data"), bool):
-            facts["training_on_customer_data"], facts["training_quote"] = out["training_on_customer_data"], t_sent
+    verdicts = {}
+    for i, (kind, sent) in enumerate(new_sents):
+        v = {"kind": kind, "text": sent[:300], "by": "regex"}
+        llm_v = out.get(i) if i < len(batch) else None
+        if kind == "training":
+            v["allows"] = policy.trains(sent)
+            if llm_v and isinstance(llm_v.get("allows_training"), bool):
+                v["allows"], v["by"] = llm_v["allows_training"], "liquid"
+            elif llm_v and llm_v.get("allows_training") is None and "allows_training" in llm_v:
+                v["allows"], v["by"] = None, "liquid"   # the model says it isn't about customer data
         else:
-            facts["training_on_customer_data"], facts["training_quote"] = policy.trains(t_cands[0]), t_cands[0]
-    if r_cands:
-        r_sent = _ground(out.get("retention_quote") or "", changed)
-        r_sent = r_sent if r_sent in r_cands else r_cands[0]
-        facts["retention_days"], facts["retention_quote"] = policy.duration_days(r_sent), r_sent
-    return facts, usage, source
+            v["days"] = policy.duration_days(sent)
+            if llm_v and llm_v.get("customer_data_retention") is False:
+                v["days"], v["by"] = None, "liquid"
+            elif llm_v:
+                v["by"] = "liquid"
+        verdicts[policy.sentence_key(kind, sent)] = v
+    return verdicts, usage, source
+
+
+def _facts(verdicts: dict[str, dict]) -> tuple[bool | None, str, int | None, str]:
+    """Current facts from every judged sentence still in the terms. Removed sentences are gone
+    from `verdicts`, so deleting an injected clause turns the vendor green again."""
+    t = [v for v in verdicts.values() if v["kind"] == "training" and v.get("allows") is not None]
+    r = [v for v in verdicts.values() if v["kind"] == "retention" and v.get("days") is not None]
+    allowing = [v for v in t if v["allows"]]
+    training = True if allowing else False if t else None
+    t_quote = (allowing or t or [{"text": ""}])[0]["text"]
+    longest = max(r, key=lambda v: v["days"]) if r else None
+    return training, t_quote, (longest["days"] if longest else None), (longest["text"] if longest else "")
 
 
 def _alert(card: StateCard, snap: Snapshot, tick: int, kind: str, rule: str, title: str,
@@ -93,7 +92,8 @@ def _alert(card: StateCard, snap: Snapshot, tick: int, kind: str, rule: str, tit
     return Alert(vendor=card.vendor, display_name=card.display_name, tick=tick, kind=kind, rule=rule,
                  title=title, before=before, after=after, explanation=explanation,
                  evidence_snapshot_id=snap.snapshot_id, evidence_url=(snap.source_urls or [""])[0],
-                 is_demo_mirror=snap.is_demo_mirror)
+                 is_demo_mirror=snap.is_demo_mirror,
+                 alert_id=f"{card.vendor}:{tick}:{rule}:{kind}:{sha(title)[:8]}")
 
 
 def _ordinal(n: int) -> str:
@@ -127,54 +127,76 @@ def _compact_notes(old_notes: str, line: str, c: dict) -> str:
     return "\n".join(kept)[:NOTES_MAX]
 
 
-def _sub_alerts(old: StateCard, new: StateCard, snap: Snapshot, tick: int) -> list[Alert]:
+def _by_name(subs: list[Subprocessor]) -> dict[str, dict]:
+    """Group rows by sub-processor name, so a vendor listing one company in several regions is one entry."""
+    out: dict[str, dict] = {}
+    for sp in subs:
+        e = out.setdefault(policy.sub_key(sp), {"name": sp.name, "purpose": sp.purpose, "locations": [], "bad": []})
+        e["locations"].append(sp.country)
+        e["bad"] += [c for c in policy.unapproved(sp) if c not in e["bad"]]
+    return out
+
+
+def _sub_alerts(old: StateCard, new: StateCard, snap: Snapshot, tick: int, first: bool) -> list[Alert]:
     alerts = []
-    before = {policy.sub_key(s): s for s in old.subprocessors}
-    after = {policy.sub_key(s): s for s in new.subprocessors}
-    for k, s in after.items():
-        bad, was_bad = policy.unapproved(s), policy.unapproved(before[k]) if k in before else []
-        if bad and not was_bad:
-            verb = "added" if k not in before else "moved"
-            past = old.ledger.get(k, {})
-            recurring = verb == "added" and past.get("last_removed") is not None
-            title = f"{new.display_name} {verb} {s.name} ({s.country})"
-            explanation = (f"{s.name} processes data in {', '.join(bad)}, which is not on {COMPANY}'s "
-                           f"approved list. {RULES['R1']}.")
-            if recurring:
-                n = past.get("times_added", 1) + 1
-                title = f"{new.display_name} re-added {s.name} ({s.country}), {_ordinal(n)} time"
-                explanation += (f" Recurring: first seen t{past.get('first_seen')}, last removed "
-                                f"t{past['last_removed']}. Escalate: removal didn't stick.")
-            alerts.append(_alert(new, snap, tick, "violation", "R1", title,
-                                 "not listed" if k not in before else f"{before[k].name}: {before[k].country}",
-                                 f"{s.name}: {s.purpose} ({s.country})", explanation))
-    for k, s in before.items():
-        if policy.unapproved(s) and (k not in after or not policy.unapproved(after[k])):
-            alerts.append(_alert(new, snap, tick, "resolved", "R1",
-                                 f"{new.display_name} no longer sends data to {s.name} ({s.country})",
-                                 f"{s.name}: {s.country}", "removed" if k not in after else after[k].country,
-                                 f"{RULES['R1']}: back in compliance."))
+    before, after = _by_name(old.subprocessors), _by_name(new.subprocessors)
+    for k, e in after.items():
+        fresh_bad = [c for c in e["bad"] if c not in before.get(k, {}).get("bad", [])]
+        if not fresh_bad:
+            continue
+        where = ", ".join(x for x in e["locations"] if x) or ", ".join(fresh_bad)
+        past = old.ledger.get(k, {})
+        explanation = (f"{e['name']} processes data in {', '.join(fresh_bad)}, which is not on {COMPANY}'s "
+                       f"approved list. {RULES['R1']}.")
+        if first:
+            title = f"Baseline: {new.display_name} already uses {e['name']} ({where})"
+        elif k in before:
+            title = f"{new.display_name} moved {e['name']} to {where}"
+        elif past.get("last_removed") is not None:
+            title = f"{new.display_name} re-added {e['name']} ({where}), {_ordinal(past.get('times_added', 1) + 1)} time"
+            explanation += (f" Recurring: first seen t{past.get('first_seen')}, last removed "
+                            f"t{past['last_removed']}. Escalate: removal didn't stick.")
+        else:
+            title = f"{new.display_name} added {e['name']} ({where})"
+        alerts.append(_alert(new, snap, tick, "violation", "R1", title,
+                             "not listed" if k not in before else ", ".join(before[k]["locations"]),
+                             f"{e['name']}: {e['purpose']} ({where})", explanation))
+    still_open = any(f.rule == "R1" for f in new.open_findings)
+    for k, e in before.items():
+        gone_bad = [c for c in e["bad"] if c not in after.get(k, {}).get("bad", [])]
+        if not gone_bad:
+            continue
+        alerts.append(_alert(new, snap, tick, "resolved", "R1",
+                             f"{new.display_name} no longer sends data to {e['name']} in {', '.join(gone_bad)}",
+                             ", ".join(e["locations"]), "removed" if k not in after else ", ".join(after[k]["locations"]),
+                             f"{e['name']} no longer processes data in {', '.join(gone_bad)}. "
+                             + ("Other R1 findings are still open." if still_open else "Back in compliance with R1.")))
     return alerts
 
 
-def _clause_alerts(old: StateCard, new: StateCard, snap: Snapshot, tick: int) -> list[Alert]:
+def _clause_alerts(old: StateCard, new: StateCard, snap: Snapshot, tick: int, first: bool) -> list[Alert]:
     alerts = []
     q_old, q_new = old.clause_quotes, new.clause_quotes
     was, now = old.training_on_customer_data is True, new.training_on_customer_data is True
     if now != was:
-        alerts.append(_alert(new, snap, tick, "violation" if now else "resolved", "R2",
-                             f"{new.display_name} {'now allows' if now else 'no longer allows'} training on customer data",
+        title = (f"Baseline: {new.display_name}'s terms allow training on customer data" if first else
+                 f"{new.display_name} {'now allows' if now else 'no longer allows'} training on customer data")
+        alerts.append(_alert(new, snap, tick, "violation" if now else "resolved", "R2", title,
                              q_old.get("training", "not stated"), q_new.get("training", "not stated"),
-                             f"{RULES['R2']}." + (" This change breaks it." if now else " Back in compliance.")))
+                             f"{RULES['R2']}." + (" This change breaks it." if now and not first else
+                                                  " Back in compliance." if not now else "")))
     limit = policy.MAX_RETENTION_DAYS
     was = old.retention_days is not None and old.retention_days > limit
     now = new.retention_days is not None and new.retention_days > limit
     if now != was:
-        alerts.append(_alert(new, snap, tick, "violation" if now else "resolved", "R3",
-                             f"{new.display_name} retention changed to {new.retention_days} days",
+        title = (f"Baseline: {new.display_name} keeps customer data {new.retention_days} days" if first else
+                 f"{new.display_name} retention changed to {new.retention_days} days" if new.retention_days
+                 else f"{new.display_name} no longer states a retention period over {limit} days")
+        alerts.append(_alert(new, snap, tick, "violation" if now else "resolved", "R3", title,
                              q_old.get("retention", f"{old.retention_days} days"),
                              q_new.get("retention", f"{new.retention_days} days"),
-                             f"{RULES['R3']}." + (" This change breaks it." if now else " Back in compliance.")))
+                             f"{RULES['R3']}." + (" This change breaks it." if now and not first else
+                                                  " Back in compliance." if not now else "")))
     return alerts
 
 
@@ -185,43 +207,47 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
     new = old.model_copy(deep=True)
     new.tick, new.last_snapshot_id, new.display_name = tick, snap.snapshot_id, snap.display_name
     new.updated_at = snap.fetched_at
+    c = dict(old.counters)
 
-    # 1. Sub-processors: structured, so diff them in code.
-    new.subprocessors = [Subprocessor(**s.model_dump()) for s in snap.subprocessors]
-    subs_changed = ({(policy.sub_key(s), s.country) for s in old.subprocessors}
-                    != {(policy.sub_key(s), s.country) for s in new.subprocessors})
+    # 1. Sub-processors: structured, so diff them in code. An empty list after a non-empty one
+    #    is almost always a failed fetch, not a vendor dropping every sub-processor: keep the old list.
+    if snap.subprocessors or first or not old.subprocessors:
+        new.subprocessors = [Subprocessor(**sp.model_dump()) for sp in snap.subprocessors]
+    else:
+        c["fetch_gaps"] = c.get("fetch_gaps", 0) + 1
+    subs_changed = ({(policy.sub_key(sp), sp.country) for sp in old.subprocessors}
+                    != {(policy.sub_key(sp), sp.country) for sp in new.subprocessors})
 
-    # 2. Policy text: only paragraphs whose hash we haven't seen go to the model. Unchanged = 0 tokens.
-    paras = snap.policy_text and policy.paragraphs(snap.policy_text) or []
-    seen = set(old.policy_paragraph_hashes)
-    changed = policy.relevant(paras) if first else [p for p in paras if policy.para_hash(p) not in seen]
+    # 2. Policy text. Unchanged paragraphs cost nothing. If anything changed, find the candidate
+    #    sentences in the whole policy; only ones never judged before go to Liquid.
+    paras = policy.paragraphs(snap.policy_text)
+    hashes = [policy.para_hash(p) for p in paras]
     usage, source = {"input_tokens": 0, "output_tokens": 0}, "none"
-    if changed:
-        facts, usage, source = _extract(old, changed)
-        if facts["training_on_customer_data"] is not None:
-            new.training_on_customer_data = facts["training_on_customer_data"]
-            if facts["training_quote"]:
-                new.clause_quotes["training"] = facts["training_quote"][:300]
-        if facts["retention_days"] is not None:
-            new.retention_days = facts["retention_days"]
-            if facts["retention_quote"]:
-                new.clause_quotes["retention"] = facts["retention_quote"][:300]
-    if paras:
-        new.policy_paragraph_hashes = [policy.para_hash(p) for p in paras]
+    text_changed = bool(paras) and (first or set(hashes) != set(old.policy_paragraph_hashes))
+    if not paras and old.policy_paragraph_hashes:
+        c["fetch_gaps"] = c.get("fetch_gaps", 0) + 1           # empty policy = failed fetch: keep facts
+    elif text_changed:
+        cands = policy.candidates(paras)
+        keys = [policy.sentence_key(k, sent) for k, sent in cands]
+        new_sents = [cs for cs, key in zip(cands, keys) if key not in old.sentence_verdicts]
+        judged, usage, source = _judge(new_sents) if new_sents else ({}, usage, "gate")
+        new.sentence_verdicts = {key: old.sentence_verdicts.get(key) or judged[key] for key in keys}
+        (new.training_on_customer_data, t_quote, new.retention_days, r_quote) = _facts(new.sentence_verdicts)
+        new.clause_quotes = {k: v for k, v in {"training": t_quote, "retention": r_quote}.items() if v}
+        new.policy_paragraph_hashes = hashes
 
     # 3. Compliance is decided in code, from the rewritten card.
     new.open_findings = policy.findings(new, snap.snapshot_id, tick, old.open_findings)
     new.status = "red" if new.open_findings else "green"
     facts_changed = (old.training_on_customer_data, old.retention_days) != (new.training_on_customer_data, new.retention_days)
     material = first or subs_changed or facts_changed
-    alerts = _sub_alerts(old, new, snap, tick) + _clause_alerts(old, new, snap, tick)
+    alerts = _sub_alerts(old, new, snap, tick, first) + _clause_alerts(old, new, snap, tick, first)
     _update_ledger(old, new, tick)
     if material:
         new.last_material_change_tick = tick
 
     # 4. Counters replace history: what happened is remembered as numbers, not transcripts.
-    c = dict(old.counters)
-    kind = "material" if material else "noise" if changed else "unchanged"
+    kind = "material" if material else "noise" if text_changed else "unchanged"
     for key, inc in [("ticks", 1), (kind, 1), ("llm_calls", int(source == "liquid")),
                      ("violations", sum(a.kind == "violation" for a in alerts)),
                      ("resolved", sum(a.kind == "resolved" for a in alerts))]:
@@ -239,7 +265,7 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
     log = TickLog(run_id=run_id, tick=tick, agent="nights_watch", vendor=snap.vendor,
                   input_tokens=usage["input_tokens"], output_tokens=usage["output_tokens"],
                   material=material, llm_calls=int(source == "liquid"),
-                  card_tokens=llm.count_tokens(json.dumps(new.prompt_view())),
+                  card_tokens=llm.count_tokens(json.dumps(new.prompt_view(), ensure_ascii=False)),
                   latency_ms=int((time.monotonic() - t0) * 1000))
     return new, alerts, log
 
@@ -250,6 +276,6 @@ def naive_tokens(prev_total: int, snap: Snapshot, first: bool) -> int:
     Measured with the same tokenizer, not run (running it would just be slow). Label it that way.
     """
     body = json.dumps({"subprocessors": [s.model_dump() for s in snap.subprocessors],
-                       "policy_text": snap.policy_text})
+                       "policy_text": snap.policy_text}, ensure_ascii=False)
     overhead = 150 if first else 0  # system prompt + instructions, paid once
     return prev_total + overhead + llm.count_tokens(body)

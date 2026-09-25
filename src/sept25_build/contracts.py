@@ -139,9 +139,11 @@ class StateCard(BaseModel):
     updated_at: datetime = Field(default_factory=now)
     policy_paragraph_hashes: list[str] = []
     ledger: dict[str, dict] = {}     # every sub-processor ever seen: first_seen, times_added, last_removed
+    sentence_verdicts: dict[str, dict] = {}  # judged policy sentences still in the terms: kind, text, allows/days, by
 
     def prompt_view(self) -> dict:
-        return self.model_dump(mode="json", exclude={"policy_paragraph_hashes", "ledger", "updated_at"})
+        return self.model_dump(mode="json", exclude={"policy_paragraph_hashes", "ledger", "sentence_verdicts",
+                                                     "updated_at"})
 
     def to_row(self) -> dict:
         return {
