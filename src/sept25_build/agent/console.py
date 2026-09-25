@@ -496,16 +496,16 @@ def _once(job: "_Job", text: str, detail: str) -> None:
         prev["detail"] = detail
 
 
-def _simulate(job: _Job, scenario: str) -> None:
+def _simulate(job: _Job, scenario: str, cmd: list[str] | None = None, what: str = "") -> None:
     env = dict(os.environ, NO_COLOR="1", PYTHONUNBUFFERED="1", SITE_URL=_site_url())
     job.start("Applying the change to Tinybird's demo mirror")
-    p = subprocess.run(SCENARIOS[scenario], cwd=ROOT, env=env, capture_output=True, text=True, timeout=60)
+    p = subprocess.run(cmd or SCENARIOS[scenario], cwd=ROOT, env=env, capture_output=True, text=True, timeout=60)
     if p.returncode != 0:
         raise RuntimeError(((p.stderr or p.stdout) or "inject failed").strip()[-300:])
     job.d["steps"][-1]["detail"] = {
         "new_subprocessor": "Added DataHarvest Ltd to Tinybird's sub-processor list, with no location listed",
         "training_clause": "Changed Tinybird's AI-training clause to allow training on customer data",
-        "undo": "Put Tinybird's pages back to the original"}.get(scenario, "")
+        "undo": "Put Tinybird's pages back to the original"}.get(scenario, what)
     job.start("Reading Tinybird's pages")
     proc = subprocess.Popen(TICK, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                             bufsize=1)
@@ -600,6 +600,17 @@ class Handler(BaseHTTPRequestHandler):
         elif path.startswith("/api/job/"):
             j = _jobs.get(path.rsplit("/", 1)[-1])
             self._json(200 if j else 404, j or {"error": "no such job"})
+        elif path == "/about" or path.startswith("/about/"):  # lane C's marketing landing page + its assets
+            name = path[len("/about/"):] or "index.html"
+            f = (WEB_CONSOLE.parent / name).resolve()
+            ctype = {".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "text/javascript",
+                     ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".ico": "image/x-icon"}
+            if path == "/about":
+                self.send_response(301); self.send_header("Location", "/about/"); self.end_headers()
+            elif f.parent == WEB_CONSOLE.parent.resolve() and f.is_file() and f.suffix in ctype:
+                self._send(200, f.read_bytes(), ctype[f.suffix])
+            else:
+                self._send(404, b"not found", "text/plain")
         elif path == "/classic":  # lane B's original all-panels page, kept as a fallback
             self._send(200, PAGE.replace("__SUFFIX__", SUFFIX or "(stage tables)").encode(), "text/html; charset=utf-8")
         elif path == "/api/state":
@@ -624,6 +635,15 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(*_launch("onboard", _onboard, url))
         if path == "/api/simulate":
             sc = str(body.get("scenario") or "")
+            if sc == "custom":  # Tinybird adds a company the user names, no location listed: the agent follows its URL
+                name, url = str(body.get("name") or "").strip(), str(body.get("url") or "").strip()
+                if not re.match(r"^[\w .,&'()-]{2,60}$", name):
+                    return self._json(400, {"error": "enter the company's name"})
+                if len(url) > 200 or not re.match(r"^(https?://)?[A-Za-z0-9.-]+\.[A-Za-z]{2,}(:\d+)?(/[\w./-]*)?$", url):
+                    return self._json(400, {"error": "enter the company's website, like https://example.com"})
+                url = url if re.match(r"^https?://", url) else "https://" + url
+                cmd = INJECT + ["add-subprocessor", "--vendor", "tinybird", "--name", name, "--country", "", "--url", url]
+                return self._json(*_launch("simulate", _simulate, sc, cmd, f"Added {name} ({url}) to Tinybird's sub-processor list, with no location listed"))
             if sc not in SCENARIOS:
                 return self._json(400, {"error": f"unknown scenario (allowed: {', '.join(SCENARIOS)})"})
             return self._json(*_launch("simulate", _simulate, sc))
