@@ -306,7 +306,19 @@ def _op_phrase(o: dict) -> str:
     return f"{op} {f}"
 
 
+def app_overview() -> dict:
+    """What the app page (agent/ui/app.html) shows: the site the user checked last."""
+    with _real_lock:
+        if _real.get("vendors"):
+            return _real_overview()
+    return {"site_url": "", "real": True, "watching": False, "suffix": SUFFIX, "vendors": [], "latest_event": None,
+            "stats": {}}
+
+
+
+
 def overview() -> dict:
+    """The recorded RawTree run (stage demo tables); web/export_demo.py and the stage pages read this."""
     with _cache_lock:
         if _ocache["data"] is not None and time.time() - _ocache["at"] < 1.5:
             return _ocache["data"]
@@ -422,13 +434,39 @@ def _launch(kind: str, fn, *args) -> tuple[int, dict]:
 _SUBP = re.compile(r"sub[\s_-]?processors?", re.I)
 _HINT = re.compile(r"trust|legal|privacy|dpa|gdpr|security|compliance", re.I)
 _ALINK = re.compile(r"""<a\b[^>]*?href=["']([^"'#]+)["'][^>]*>(.*?)</a>""", re.I | re.S)
-_OK_PLACES = {"usa", "us", "u.s.", "u.s.a.", "united states of america", "uk", "u.k.", "great britain", "eu", "eea",
-              "european union", "europe", "european economic area"}
+_ARCHIVE = re.compile(r"archive|preview|/\d{4}-\d{2}-\d{2}|-20\d{6}", re.I)
+_SKIP_URL = re.compile(r"log-?in|sign-?in|sign-?up|contact-sales|pricing|[?&](next|redirect|return)", re.I)
+_LOCALE = re.compile(r"^/(?!en(?:[-_][a-z]{2})?/)[a-z]{2}(?:[-_][a-zA-Z]{2})?/")
+_FILE_HOSTS = ("amazonaws.com", "cloudfront.net", "googleusercontent.com", "googleapis.com", "windows.net", "github.io",
+               "githubusercontent.com", "notion.site", "sharepoint.com", "dropbox.com", "box.com")
+_OK_PLACES = {"usa", "us", "u.s.", "u.s", "u.s.a.", "united states of america", "united state of america", "america", "uk",
+              "u.k.", "great britain", "england", "scotland", "wales", "northern ireland", "united kingdom of great britain",
+              "eu", "eea", "european union", "europe", "european economic area", "czechia", "republic of ireland",
+              "the netherlands", "holland", "federal republic of germany", "french republic", "kingdom of the netherlands",
+              "republic of poland", "swiss confederation"}
+_US_STATES = {"alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut", "delaware", "florida",
+              "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana", "maine",
+              "maryland", "massachusetts", "michigan", "minnesota", "mississippi", "missouri", "montana", "nebraska",
+              "nevada", "new hampshire", "new jersey", "new mexico", "new york", "north carolina", "north dakota", "ohio",
+              "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina", "south dakota", "tennessee", "texas",
+              "utah", "vermont", "virginia", "washington", "west virginia", "wisconsin", "wyoming", "district of columbia"}
+_VAGUE = {"global", "globally", "worldwide", "various", "multiple", "international", "emea", "apac", "amer", "latam",
+          "asia pacific", "americas", "rest of world", "all regions", "multiple regions", "multiple countries", "local"}
+_FILLER = re.compile(r"\b(?:hosted|hosting|in|the|servers?|located|locations?|of|processing|data|cent(?:er|re)s?|regions?|"
+                     r"aws|azure|gcp|primary|secondary|backup|only|with|for|east|west|central|us-east-\d|eu-west-\d|n/a|"
+                     r"na|none|see|below|above|note|may|also|entity|headquarters|hq|offices?|support)\b")
+_ADDRESS = re.compile(r"\s+\d{1,5}\s+(?:[A-Z][\w.'-]*\s+){1,4}(?:St|Street|Ave|Avenue|Road|Rd|Blvd|Boulevard|Way|Drive|Dr|"
+                      r"Lane|Ln|Place|Pl|Square|Sq|Suite|Floor|Parkway|Pkwy|Court|Ct)\b.*$")
+_NAME_KEYS = ("sub-processor", "subprocessor", "name", "company", "vendor", "provider", "processor", "entity", "third part")
+_LOC_KEYS = ("processing location", "location of processing", "data location", "hosting location", "country of processing",
+             "entity country", "country", "countries", "location", "jurisdiction", "region", "where")
+_PURPOSE_KEYS = ("processing activit", "purpose", "nature", "function", "description", "activit", "service")
 
 
 def _text(h: str) -> str:
     import html as _html
-    return re.sub(r"\s+", " ", _html.unescape(re.sub(r"<[^>]+>", " ", h))).strip()
+    t = _html.unescape(re.sub(r"<[^>]+>", " ", h)).replace("\\n", " ").replace("\\t", " ").replace('\\"', '"')
+    return re.sub(r"\s+", " ", t).strip()
 
 
 def _fetch(u: str, render: bool = False) -> str:
@@ -446,20 +484,41 @@ def _fetch(u: str, render: bool = False) -> str:
             return ""
 
 
+def _on_site(h: str, site: str) -> bool:
+    return h == site or h.endswith("." + site)
+
+
 def _links(page: str, base: str, site: str) -> list[tuple[int, str]]:
+    import html as _html
     from urllib.parse import urljoin, urlparse
     out = []
     for href, label in _ALINK.findall(page):
-        u = urljoin(base, href.strip()).split("#")[0]
-        if not u.startswith("http"):
+        href = _html.unescape(href.strip())
+        u = urljoin(base, href).split("#")[0]
+        p = urlparse(u)
+        if not u.startswith("http") or _SKIP_URL.search(u) or _LOCALE.match(p.path or "/"):
             continue
         both = href + " " + _text(label)
-        h = (urlparse(u).hostname or "").lower()
-        if _SUBP.search(both):
+        h = (p.hostname or "").lower()
+        if _SUBP.search(both) and _on_site(h, site):
             out.append((3, u))
-        elif _HINT.search(both) and (h.endswith(site) or h.startswith("trust.")):
+        elif _HINT.search(both) and (_on_site(h, site) or h.startswith("trust.")):
             out.append((1, u))
     return out
+
+
+def _pick(head: list[str], keys: tuple, skip=()) -> int | None:
+    for k in keys:  # keyword priority first, so "Entity Country" beats a coarse "Region" column to its left
+        for i, x in enumerate(head):
+            if i not in skip and k in x:
+                return i
+    return None
+
+
+def _clean_name(name: str) -> str:
+    name = _ADDRESS.sub("", name)
+    name = re.sub(r"\(\s*effective\b.*$", "", name, flags=re.I)
+    return name.strip(" ,*†‡")
 
 
 def _rows(page: str) -> list[dict]:
@@ -468,23 +527,33 @@ def _rows(page: str) -> list[dict]:
         cells = [[_text(c) for c in re.findall(r"<t[hd]\b[^>]*>(.*?)</t[hd]>", tr, re.I | re.S)]
                  for tr in re.findall(r"<tr\b.*?</tr>", table, re.I | re.S)]
         cells = [c for c in cells if any(c)]
-        if len(cells) < 2:
+        hi = next((i for i, c in enumerate(cells[:3]) if len(c) >= 2 and _pick([x.lower() for x in c], _LOC_KEYS) is not None),
+                  None)  # the header row: skips a title row spanning the table
+        if hi is None:
             continue
-        head = [x.lower() for x in cells[0]]
-
-        def col(*ws, skip=()):
-            return next((i for i, x in enumerate(head) if i not in skip and any(w in x for w in ws)), None)
-        ni = col("name", "entity", "processor", "vendor", "provider", "company", "third part")
-        ci = col("location", "country", "countries", "region", "where", "jurisdiction", skip=(ni,))
-        pi = col("purpose", "service", "function", "activit", "description", "nature", skip=(ni, ci))
+        head = [x.lower() for x in cells[hi]]
+        ni = _pick(head, _NAME_KEYS)
+        ni = 0 if ni is None else ni
+        ci = _pick(head, _LOC_KEYS, skip=(ni,))
         if ci is None:  # a sub-processor table says where data goes; tables without a location column are something else
             continue
-        for c in cells[1:]:
+        pi = _pick(head, _PURPOSE_KEYS, skip=(ni, ci))
+        for c in cells[hi + 1:]:
+            c = [x[len(head[i]):].strip(" :") if i < len(head) and head[i] and x.lower().startswith(head[i]) and
+                 len(x) > len(head[i]) else x for i, x in enumerate(c)]  # responsive tables repeat the column label
+            if sum(1 for x in c if x) < 2:  # a section heading spanning the row, not a company
+                continue
+            if len(c) == len(head) - 1 and ni == 0 and rows:  # rowspan on the name: another location for the row above
+                extra = c[ci - 1] if ci - 1 < len(c) else ""
+                if extra and extra not in rows[-1]["country"]:
+                    rows[-1]["country"] = (rows[-1]["country"] + "; " + extra)[:400]
+                continue
+
             def g(i):
                 return c[i] if i is not None and i < len(c) else ""
-            name = g(ni if ni is not None else 0)
+            name = _clean_name(g(ni))
             if name and len(name) <= 120 and name.lower() not in head:
-                rows.append({"name": name, "purpose": g(pi)[:160], "country": g(ci)[:160]})
+                rows.append({"name": name, "purpose": g(pi)[:200], "country": g(ci)[:400]})
     return rows or _json_rows(page)
 
 
@@ -505,22 +574,180 @@ def _json_rows(page: str) -> list[dict]:
             where = x.get("location") or x.get("country") or x.get("countries") or x.get("region") or ""
             where = ", ".join(where) if isinstance(where, list) else str(where)
             if name and isinstance(name, str):
-                rows.append({"name": name[:120], "country": where[:160],
-                             "purpose": str(x.get("service_description") or x.get("purpose") or x.get("description") or "")[:160]})
+                rows.append({"name": _clean_name(name)[:120], "country": where[:400],
+                             "domain": str(co.get("domain") or x.get("domain") or "")[:100],
+                             "purpose": str(x.get("service_description") or x.get("purpose") or x.get("description") or "")[:200]})
         if rows:
             break
     return rows
 
 
+def _merge(rows: list[dict]) -> list[dict]:
+    """One row per company; a company listed per product or region keeps every location (none silently dropped)."""
+    out: dict[str, dict] = {}
+    for r in rows:
+        k = re.sub(r"[^a-z0-9]+", " ", r["name"].lower()).strip()
+        if not k:
+            continue
+        if k not in out:
+            out[k] = dict(r)
+            continue
+        o = out[k]
+        for f in ("country", "purpose"):
+            if r.get(f) and r[f] not in o.get(f, ""):
+                o[f] = (o.get(f, "") + "; " + r[f]).strip("; ")[:400]
+        o["domain"] = o.get("domain") or r.get("domain", "")
+    return list(out.values())
+
+
 def _review(loc: str) -> list[str]:
-    """Places in a location cell that aren't on the approved list (or are too vague to check)."""
+    """Places in a location cell that aren't on the approved list, plus values too vague to check (e.g. "Global")."""
     from ..contracts import APPROVED_COUNTRIES
-    ok = {c.lower() for c in APPROVED_COUNTRIES} | _OK_PLACES
-    parts = [re.sub(r"\(.*?\)", "", p).strip(" .*-").lower() for p in re.split(r",|/|;|\n|&|\band\b", loc or "")]
-    return [p.title() if len(p) > 3 else p.upper() for p in parts if p and p not in ok]
+    ok = sorted({c.lower() for c in APPROVED_COUNTRIES} | _OK_PLACES | _US_STATES, key=len, reverse=True)
+    rest = re.sub(r"\(.*?\)", " ", (loc or "").replace("\\n", " ").lower())
+    for place in ok:  # strip every approved place first, so "United States Australia Japan" leaves just "australia"
+        rest = re.sub(r"(?<![a-z])" + re.escape(place) + r"(?![a-z])", ",", rest)
+    out = []
+    for p in re.split(r",|/|;|\n|&|\||\+|\band\b|\bor\b|:", rest):
+        p = re.sub(r"\s+", " ", _FILLER.sub(" ", p)).strip(" .*-'\"")
+        if not p or not re.search(r"[a-z]{2}", p):
+            continue
+        if len(p) > 30:  # prose, not a place: keep only the named countries or vague words inside it
+            out += [c for c in _OTHER_COUNTRIES if c.lower() in p] + [w.title() for w in _VAGUE if re.search(rf"\b{w}\b", p)]
+            continue
+        out.append(p.title() if len(p) > 4 else p.upper())
+    return list(dict.fromkeys(out))
 
 
-def _discover(job: _Job, url: str, demo: str) -> None:
+def _issue_title(review: list[str]) -> str:
+    places = [p for p in review if p.lower() not in _VAGUE]
+    vague = [p for p in review if p.lower() in _VAGUE]
+    return ("Processes data outside your approved countries: " + ", ".join(places) if places else
+            "Location too vague to confirm: " + ", ".join(vague))
+
+
+_REAL_FILE = ROOT / "out" / "nw_real_site.json"
+_real_lock = threading.RLock()
+try:
+    _real: dict = json.loads(_REAL_FILE.read_text()) if _REAL_FILE.exists() else {}
+    for _v in _real.get("vendors", []):
+        if _v.get("chain") == "loading":  # the console stopped mid-read: let the next open retry
+            _v["chain"] = "idle"
+except Exception:
+    _real = {}
+_STOP = {"inc", "llc", "ltd", "limited", "corp", "corporation", "co", "company", "gmbh", "the", "and", "dba", "plc", "sa",
+         "sas", "bv", "ag", "pte", "pty", "technologies", "technology", "services", "software", "group", "holdings", "labs",
+         "cloud", "platform", "systems", "international", "global", "usa", "europe", "web", "data", "functional"}
+
+
+def _save_real() -> None:
+    with _real_lock:
+        try:
+            _REAL_FILE.parent.mkdir(exist_ok=True)
+            _REAL_FILE.write_text(json.dumps(_real))
+        except Exception as e:
+            print(f"saving real-site state failed: {type(e).__name__}")
+    with _cache_lock:
+        _ocache["data"] = None
+
+
+def _tokens(name: str) -> list[str]:
+    return [t for t in re.findall(r"[a-z0-9]+", name.lower()) if len(t) >= 3 and t not in _STOP]
+
+
+def _owned(h: str, dom: str, toks: list[str]) -> bool:
+    """Is host h the vendor's own site (not a third party that mentions it, not someone's file bucket)?"""
+    if any(_on_site(h, f) for f in _FILE_HOSTS):
+        return False
+    if dom and _on_site(h, dom.split("/")[0]):
+        return True
+    labels = h.split(".")
+    reg = labels[-3] if len(labels) >= 3 and labels[-2] in ("co", "com", "org", "net", "ac", "gov") else labels[-2] if len(labels) >= 2 else h
+    return any(reg == t or reg.startswith(t) for t in toks)
+
+
+def _chain(slug: str) -> None:
+    """One level down: read this vendor's own sub-processor list (search its own domain via Nimble)."""
+    from concurrent.futures import ThreadPoolExecutor
+    from urllib.parse import urlparse
+    with _real_lock:
+        v = next((x for x in _real.get("vendors", []) if x["slug"] == slug), None)
+    if v is None:
+        return
+    try:
+        from .. import ingest
+        toks = _tokens(v["name"]) or re.findall(r"[a-z0-9]+", v["name"].lower())[:1]
+        dom = (v.get("domain") or "").lower().removeprefix("www.")
+        q = " ".join(toks[:3]) or v["name"]  # "Snowflake, Inc." searches better as "snowflake"
+        res = ingest._nimble().search(query=f"{q} subprocessors list", max_results=8, search_depth="lite")
+        d = res.model_dump() if hasattr(res, "model_dump") else res
+        cands = []
+        for x in (d.get("results") or []):
+            u = x.get("url") or ""
+            h = (urlparse(u).hostname or "").lower()
+            if _owned(h, dom, toks) and not _SKIP_URL.search(u) and (_SUBP.search(u) or _SUBP.search(x.get("title") or "")):
+                cands.append(u)
+        cands = sorted(dict.fromkeys(cands), key=lambda u: bool(_ARCHIVE.search(u)))[:4]
+        best, rows = "", []
+        if cands:
+            with ThreadPoolExecutor(4) as pool:
+                pages = dict(zip(cands, pool.map(_fetch, cands)))
+            scored = sorted(cands, key=lambda u: (bool(_ARCHIVE.search(u)), -len(_rows(pages[u]))))
+            if _rows(pages[scored[0]]):
+                best, rows = scored[0], _rows(pages[scored[0]])
+            else:
+                for u in cands[:2]:
+                    pg = _fetch(u, render=True)
+                    if _rows(pg):
+                        best, rows = u, _rows(pg)
+                        break
+        rows = _merge(rows)
+        for r in rows:
+            r["review"] = _review(r["country"]) if r["country"] else []
+        with _real_lock:
+            if not rows:
+                v.update(chain="none", chain_error=f"No published sub-processor list found for {v['name']}")
+            else:
+                bad = sorted({p for r in rows for p in r["review"] if p.lower() not in _VAGUE})
+                sim = [x for x in v.get("subprocessors", []) if x.get("simulated")]
+                v.update(chain="done", chain_page=best, subprocessor_count=len(rows) + len(sim),
+                         subprocessors=[{"name": r["name"], "country": r["country"], "review": r["review"],
+                                         "purpose": r["purpose"]} for r in rows[:150]] + sim)
+                if bad and v["status"] == "compliant":
+                    v["status"] = "exposed"
+                    v["issues"] = v["issues"] + [{"rule": "R1", "title": "Its own sub-processors process data outside your approved countries",
+                                                  "detail": ", ".join(bad[:8]), "policy": None}]
+            _save_real()
+    except Exception as e:
+        with _real_lock:
+            v.update(chain="failed", chain_error=f"{type(e).__name__}: {str(e)[:160]}")
+            _save_real()
+
+
+def _start_chain(slug: str) -> tuple[int, dict]:
+    with _real_lock:
+        v = next((x for x in _real.get("vendors", []) if x["slug"] == slug), None)
+        if v is None:
+            return 404, {"error": "no such vendor"}
+        if v["chain"] in ("loading", "done", "none"):
+            return 200, {"chain": v["chain"]}
+        v.update(chain="loading", chain_error="")
+    with _cache_lock:
+        _ocache["data"] = None
+    threading.Thread(target=_chain, args=(slug,), daemon=True).start()
+    return 200, {"chain": "loading"}
+
+
+def _real_overview() -> dict:
+    with _real_lock:
+        r = json.loads(json.dumps(_real))
+    vs = r.get("vendors", [])
+    return {"site_url": r.get("site_url", ""), "real": True, "watching": True, "suffix": SUFFIX,
+            "source_page": r.get("source_page", ""), "checked_at": r.get("checked_at"), "vendors": vs,
+            "latest_event": r.get("latest_event"), "stats": {"checks": r.get("checks", 1)}}
+
+
+def _discover(job: _Job, url: str) -> None:
     from concurrent.futures import ThreadPoolExecutor
     from urllib.parse import urlparse
     from ..contracts import VENDOR_ALIASES
@@ -538,7 +765,7 @@ def _discover(job: _Job, url: str, demo: str) -> None:
         d = res.model_dump() if hasattr(res, "model_dump") else res
         for x in (d.get("results") or []):
             u, h = x.get("url") or "", (urlparse(x.get("url") or "").hostname or "").lower()
-            if h.endswith(site) and (_SUBP.search(u) or _SUBP.search(x.get("title") or "")):
+            if _on_site(h, site) and not _SKIP_URL.search(u) and (_SUBP.search(u) or _SUBP.search(x.get("title") or "")):
                 found.append(u)
         s["detail"] = f"Web search via Nimble: {len(found)} likely pages"
     except Exception:
@@ -547,7 +774,7 @@ def _discover(job: _Job, url: str, demo: str) -> None:
     seen, pages = set(), {}
 
     def grab(batch):
-        batch = [u for u in batch if u not in seen][:12]
+        batch = list(dict.fromkeys(u for u in batch if u not in seen))[:12]
         seen.update(batch)
         with ThreadPoolExecutor(8) as pool:
             for u, pg in zip(batch, pool.map(_fetch, batch)):
@@ -559,7 +786,8 @@ def _discover(job: _Job, url: str, demo: str) -> None:
     grab(deeper)  # one level down: trust / legal pages usually link to the sub-processor list
 
     def score(u):
-        return (len(_rows(pages[u])) if _SUBP.search(pages[u]) else 0, bool(_SUBP.search(u)))
+        n = len(_rows(pages[u])) if _SUBP.search(pages[u]) else 0
+        return (n > 0, not _ARCHIVE.search(u), n, bool(_SUBP.search(u)))  # the live list beats an archived or preview one
     best = max(pages, key=score, default=None)
     rows = _rows(pages[best]) if best and score(best)[0] else []
     if not rows:  # JS-rendered trust centers: render the most likely page and try again
@@ -572,11 +800,10 @@ def _discover(job: _Job, url: str, demo: str) -> None:
                 break
     if not rows:
         raise RuntimeError(f"Couldn't find a readable sub-processor list on {host} (checked {len(seen)} pages). "
-                           f"Try the page's direct URL, or the demo trust center: {demo}")
-    rows = list({r["name"].lower(): r for r in rows}.values())
+                           "Try the address of the page that lists them.")
+    rows = _merge(rows)
     s["detail"] = f"Found it: {best}"
     s = job.start("Reading the sub-processors", best)
-    watched = {}
     for r in rows:
         r["review"] = _review(r["country"]) if r["country"] else []
         low = r["name"].lower()
@@ -586,77 +813,27 @@ def _discover(job: _Job, url: str, demo: str) -> None:
     bad = [r for r in rows if r["review"]]
     nol = [r for r in rows if not r["country"]]
     s["detail"] = (f"{len(bad)} need review" if bad else "All listed locations are approved") + (f"; {len(nol)} list no location" if nol else "")
-    job.d["report"] = {"page": best, "host": host, "rows": rows[:80], "total": len(rows), "demo": demo}
+    vendors = []
+    for i, r in enumerate(rows[:120]):
+        status = "review" if r["review"] else ("compliant" if r["country"] else "unknown")
+        issues = [{"rule": "R1", "title": _issue_title(r["review"]),
+                   "detail": f"Listed location: {r['country']}", "policy": None}] if r["review"] else []
+        vendors.append({"slug": f"s{i}", "name": r["name"], "status": status, "own_status": status,
+                        "location": r["country"], "purpose": r["purpose"], "domain": r.get("domain", ""),
+                        "watched": r["watched"], "issues": issues, "subprocessor_count": None, "subprocessors": [],
+                        "chain": "idle", "chain_page": "", "chain_error": ""})
+    with _real_lock:
+        _real.clear()
+        _real.update(site_url=url, host=host, source_page=best, vendors=vendors, checks=1,
+                     checked_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"))
+        _save_real()
 
 
 def _onboard(job: _Job, url: str) -> None:
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    from .. import ingest
-    from ..contracts import VENDORS
-    from . import run_tick
     url = url.strip().rstrip("/")
     if not re.match(r"^https?://", url):
         url = "https://" + url
-    url = re.sub(r"/(subprocessors|privacy|terms)$", "", url)
-    from urllib.parse import urlparse
-    demo = _site_url()
-    host = (urlparse(url).hostname or "").lower()
-    if demo and host not in (urlparse(demo).hostname, "localhost", "127.0.0.1"):
-        return _discover(job, url, demo)  # any other website: find its sub-processor page, read it, check locations
-    s = job.start("Reading your sub-processor list", url + "/subprocessors")
-    html, via = ingest._read(url + "/subprocessors")
-    slugs = [x for x in dict.fromkeys(re.findall(r"/vendors/([a-z0-9-]+)/", html)) if x in VENDORS]
-    if not slugs:
-        raise RuntimeError(f"no vendors found on {url}/subprocessors")
-    s["detail"] = f"Found {len(slugs)} vendors: {', '.join(VENDORS[x] for x in slugs)}"
-    s["state"] = "done"
-    os.environ["SITE_URL"] = url
-    steps = {v: job.add(f"Reading {VENDORS[v]}'s sub-processors and data terms") for v in slugs}
-    snaps = []
-    with ThreadPoolExecutor(len(slugs)) as pool:
-        futs = {pool.submit(ingest.fetch_vendor, v): v for v in slugs}
-        for f in as_completed(futs):
-            v, snap = futs[f], f.result()
-            if snap is None:
-                steps[v].update(state="failed", detail="could not read this vendor's pages")
-                continue
-            snaps.append(snap)
-            steps[v].update(state="done", detail=f"{len(snap.subprocessors)} sub-processors · via Nimble")
-    if not snaps:
-        raise RuntimeError("could not read any vendor's pages")
-    rawtree.insert("snapshots", [x.to_row() for x in snaps])
-
-    class Fresh(RawTreeStore):  # the snapshots just fetched: no RawTree read-after-write lag on fresh tables
-        written: list = []
-        ticks: list = []
-
-        def latest_snapshots(self):
-            return snaps
-
-        def write(self, cards, alerts, ticks, ops=()):
-            self.written, self.ticks = list(cards), list(ticks)
-            super().write(cards, alerts, ticks, ops)
-
-    s = job.start("Checking their terms against your Privacy Policy")
-    store = Fresh()
-    run_tick(store, run_id="live", agent=True)
-    judged = sum(1 for c in store.written for v in c.sentence_verdicts.values()
-                 if "liquid" in (v.get("by"), (v.get("first_opinion") or {}).get("by")))
-    s["detail"] = (f"Liquid judged {judged} policy sentences" if judged else
-                   f"Checked {len(store.written)} vendors' terms against your policy")
-    s = job.start("Building memory")
-    toks = sum(len(json.dumps(c.prompt_view())) // 4 for c in store.written)
-    s["detail"] = f"{len(store.written)} state cards, {toks:,} tokens"
-    want = {c.vendor for c in store.written}
-    for _ in range(30):  # fresh tables: wait until the page will actually see the new memory
-        try:
-            if want <= set(RawTreeStore().latest_cards()):
-                break
-        except Exception:
-            pass
-        time.sleep(0.5)
-    job.start(f"Watching {len(snaps)} vendors", url)
+    _discover(job, url)
 
 
 _LINE = re.compile(r"^\d\d:\d\d:\d\d\s+")
@@ -671,85 +848,125 @@ def _once(job: "_Job", text: str, detail: str) -> None:
         prev["detail"] = detail
 
 
-def _simulate(job: _Job, scenario: str, cmd: list[str] | None = None, what: str = "") -> None:
-    env = dict(os.environ, NO_COLOR="1", PYTHONUNBUFFERED="1", SITE_URL=_site_url())
-    job.start("Applying the change to Tinybird's demo mirror")
-    p = subprocess.run(cmd or SCENARIOS[scenario], cwd=ROOT, env=env, capture_output=True, text=True, timeout=60)
-    if p.returncode != 0:
-        raise RuntimeError(((p.stderr or p.stdout) or "inject failed").strip()[-300:])
-    job.d["steps"][-1]["detail"] = {
-        "new_subprocessor": "Added DataHarvest Ltd to Tinybird's sub-processor list, with no location listed",
-        "training_clause": "Changed Tinybird's AI-training clause to allow training on customer data",
-        "undo": "Put Tinybird's pages back to the original"}.get(scenario, what)
-    job.start("Reading Tinybird's pages")
-    proc = subprocess.Popen(TICK, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                            bufsize=1)
-    result, tail = None, []
+_OTHER_COUNTRIES = ["Singapore", "India", "China", "Hong Kong", "Russia", "Brazil", "Mexico", "Australia", "New Zealand",
+                    "South Korea", "Israel", "Turkey", "United Arab Emirates", "Saudi Arabia", "South Africa", "Philippines",
+                    "Vietnam", "Indonesia", "Malaysia", "Thailand", "Taiwan", "Argentina", "Chile", "Colombia", "Nigeria",
+                    "Egypt", "Pakistan", "Ukraine", "Belarus", "Kazakhstan"]
+SIM_SCENARIOS = ("new_subprocessor", "moves_country", "custom", "undo")
+
+
+def _find_location(page: str) -> tuple[str, str]:
+    """(where the company processes data, how it was found) from its own web page; ("", "") if not found."""
+    from ..contracts import APPROVED_COUNTRIES
+    text = _text(page)[:12000]
+    known = sorted(list(APPROVED_COUNTRIES) + _OTHER_COUNTRIES + ["European Union", "USA", "UK"], key=len, reverse=True)
+    m = re.search(r"(?:data processing locations?|(?:process|store|host)(?:es|s)? (?:all |customer |personal )*data "
+                  r"(?:only )?in)\s*[:\-]?\s*(.{1,120})", text, re.I)
+    if m:  # the countries named right after the statement, in the order they appear
+        after = m.group(1)
+        hits = {c: after.find(c) for c in known if re.search(r"(?<![A-Za-z])" + re.escape(c) + r"(?![A-Za-z])", after)}
+        hits = {c: i for c, i in hits.items() if not any(c != o and c in o for o in hits)}  # "UK" inside "United Kingdom"
+        if hits:
+            return ", ".join(sorted(hits, key=hits.get)), "stated on the page"
+    try:
+        from . import llm
+        if llm.available():
+            schema = {"type": "object", "additionalProperties": False, "required": ["country"],
+                      "properties": {"country": {"type": "string"}}}
+            out, _ = llm.json_call("You read a company's web page and answer where it processes customer data. "
+                                   "Reply with the country or countries named on the page, or an empty string.",
+                                   text[:6000], schema, max_tokens=60)
+            c = str(out.get("country") or "").strip()
+            if c and c.lower() in text.lower():
+                return c, f"read by {llm.MODEL}"
+    except Exception:
+        pass
+    counts = {c: len(re.findall(r"(?<![A-Za-z])" + re.escape(c) + r"(?![A-Za-z])", text))
+              for c in list(APPROVED_COUNTRIES) + _OTHER_COUNTRIES}
+    best = max(counts, key=counts.get)
+    return (best, "most-mentioned country on the page") if counts[best] else ("", "")
+
+
+def _real_simulate(job: _Job, scenario: str, slug: str, name: str = "", url: str = "") -> None:
+    """Simulate a vendor change on Night's Watch's copy of the watched site's list; real pages are never touched."""
     t0 = time.time()
-    for raw in proc.stdout:
-        line = _LINE.sub("", ANSI.sub("", raw.rstrip("\n"))).strip()
-        tail = (tail + [line])[-8:]
-        if time.time() - t0 > 170:
-            proc.kill()
-            raise RuntimeError("the check took too long")
-        if "(demo mirror)" in line and " via " in line and "companies" in line:
-            m = re.search(r"(\d+) companies", line)
-            job.d["steps"][-1].update(text="Read Tinybird's pages via Nimble",
-                                      detail=f"{m.group(1) if m else '?'} sub-processors · via {line.split(' via ')[-1]}")
-        elif "(demo mirror)" in line and "FAILED" in line:
-            job.d["steps"][-1].update(detail="Nimble read failed: " + line.split("FAILED", 1)[-1].strip()[:160])
-        elif line.startswith("agent: episode on") and "open questions:" in line:
-            q = line.split("open questions:", 1)[1].strip()
-            if q and q != "none":
-                job.start(f"Found a sub-processor with no listed location: {q}")
-                job.start("Investigating")
-            else:
-                job.start("Investigating the change")
-        elif line.startswith("tool fetch_page("):
-            m = re.match(r"tool fetch_page\((.*?)\) ->", line)
-            from urllib.parse import urlparse
-            u = m.group(1) if m else ""
-            opened = job.start(f"Opened {urlparse(u).path or u} via Nimble", u)
-            opened["_trunc"] = urlparse(u).path if len(u) >= 70 else ""
-        elif line.startswith("tool recall("):
-            _once(job, "Checked its memory of this vendor", "")
-        elif line.startswith("tool search_web("):
-            job.start("Searched the web", line[16:].split(") ->")[0][:120])
-        elif line.startswith("commit ") and "verified on" in line:
-            m = re.match(r"commit (.+?): (.+?), verified on (.*)", line)
-            if m:
-                for st in job.d["steps"]:  # narration cuts long URLs at 70 chars: restore the full path
-                    tr = st.pop("_trunc", "")
-                    if tr and m.group(3).strip().startswith(tr):
-                        st["text"] = f"Opened {m.group(3).strip()} via Nimble"
-                        st["detail"] = st.get("detail", "").split(tr)[0] + m.group(3).strip()
-                job.start(f"Verified: {m.group(1)} processes data in {m.group(2)}", m.group(3))
-        elif line.startswith("commit ") and "REJECTED" in line:
-            job.start("Rejected a location it could not verify", line[7:])
-        elif re.match(r"Liquid .* judged", line):
-            _once(job, "Liquid read the changed policy sentence", line)
-        elif re.match(r"\S+ (confirmed|overrode) ", line):
-            q = re.search(r'"(.*)"', line)
-            _once(job, "GPT-5.6 Sol double-checked it", q.group(1) if q else "")
-        elif line.startswith("memory:"):
-            job.start("Updated its memory", line[7:].strip()[:200])
-        elif line.startswith(("VIOLATION", "resolved")):
-            kind = "violation" if line.startswith("VIOLATION") else "resolved"
-            parts = line.split(None, 2)
-            title = _plain(parts[2]) if len(parts) > 2 else ""
-            if result is None or kind == "violation":
-                result = (kind, title)
-        elif "runner: cycle" in line and "failed" in line:
-            tail.append(line)
-    rc = proc.wait()
-    for st in job.d["steps"]:
-        st.pop("_trunc", None)
-    if rc != 0:
-        raise RuntimeError("the check failed: " + " | ".join(tail[-3:])[-300:])
-    if result:
-        job.start("Result: " + _headline(result[0], "tinybird"), result[1])
+    with _real_lock:
+        if not _real.get("vendors"):
+            raise RuntimeError("Check a website first")
+        if scenario == "undo":
+            s = job.start("Undoing simulated changes")
+            if _real.get("baseline"):
+                _real["vendors"] = _real.pop("baseline")
+            _real["latest_event"] = None
+            _save_real()
+            s["detail"] = "Back to the list as read from " + (_real.get("source_page") or "the site")
+            return
+        v = next((x for x in _real["vendors"] if x["slug"] == slug), None)
+        if v is None:
+            raise RuntimeError("Pick a vendor to change")
+        _real.setdefault("baseline", json.loads(json.dumps(_real["vendors"])))
+        vname = v["name"]
+    steps: list[dict] = []
+
+    def step(text, detail=""):
+        st = job.start(text, detail)
+        steps.append(st)
+        return st
+    if scenario == "moves_country":
+        old, new = v.get("location") or "no listed location", "India"
+        step(f"Simulating: {vname} moves customer data to {new}",
+             f"Changed Night's Watch's copy of this list, not {vname}'s real pages")
+        step("Reading the change", f"Location changed from {old} to {new}")
+        step("Checking against your Privacy Policy", f"{new} is not an approved country")
+        bad, evidence = True, _real.get("source_page", "")
+        why = f"It now processes customer data in {new}, which is not an approved country."
+        with _real_lock:
+            v.update(location=new, status="not_compliant",
+                     issues=[{"rule": "R1", "title": f"Processes data in {new}, which is not an approved country",
+                              "detail": f"Was: {old}", "policy": None}])
     else:
-        job.start("Result: nothing changed that affects your policies")
+        if scenario == "new_subprocessor":
+            name, url = "DataHarvest Ltd", _site_url() + "/companies/dataharvest"
+        if not name or not url.startswith("http"):
+            raise RuntimeError("Enter the company's name and website")
+        step(f"Simulating: {vname} adds {name} to its sub-processor list",
+             f"Changed Night's Watch's copy of this list, not {vname}'s real pages")
+        step(f"Found a new sub-processor with no listed location: {name}")
+        st = step(f"Investigating {name}", url)
+        page = _fetch(url)
+        st["text"] = f"Opened {name}'s website via Nimble" if page else f"Couldn't open {name}'s website"
+        country, how = _find_location(page) if page else ("", "")
+        step("Finding where it processes data", f"{country} ({how})" if country else
+             "No location stated on its website" if page else "Its website couldn't be read, so its location is unknown")
+        review = _review(country) if country else ["location unknown"]
+        bad, evidence = bool(review), url
+        step("Checking against your Privacy Policy",
+             f"{', '.join(review)} is not an approved country" if country and bad else
+             "Its location can't be confirmed" if bad else f"{country} is an approved country")
+        why = (f"Its new sub-processor {name} processes customer data in {country}, which is not an approved country. "
+               f"{vname} doesn't list a location; Night's Watch found it on {name}'s own website." if country and bad else
+               f"Its new sub-processor {name} doesn't say where it processes customer data." if bad else "")
+        with _real_lock:
+            subs = v.get("subprocessors") or []
+            subs.append({"name": name, "country": country, "review": review, "purpose": "", "simulated": True})
+            v["subprocessors"] = subs
+            if v.get("subprocessor_count") is not None:
+                v["subprocessor_count"] += 1
+            if bad:
+                v["status"] = "not_compliant"
+                v["issues"] = v["issues"] + [{"rule": "R1", "title": f"New sub-processor {name}: " +
+                                              (f"processes data in {country}" if country else "location unknown"),
+                                              "detail": f"Found on {url}", "policy": None}]
+    with _real_lock:
+        _real["checks"] = _real.get("checks", 1) + 1
+        _real["checked_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        _real["latest_event"] = {
+            "kind": "violation", "simulated": True, "vendor": vname, "title": why,
+            "headline": f"{vname} is no longer compliant with your Privacy Policy", "why": why, "policy": None,
+            "evidence_url": evidence, "tick": _real["checks"], "memory_edits": [],
+            "agent": {"model": "Nimble + your policy rules", "seconds": round(time.time() - t0, 1),
+                      "steps": [{"text": x["text"], "detail": x["detail"]} for x in steps]}} if bad else None
+        _save_real()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -771,7 +988,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/guided":  # lane C's guided stage page
             self._send(200, _stage_page().encode(), "text/html; charset=utf-8")
         elif path == "/api/overview":
-            self._json(200, overview())
+            self._json(200, app_overview())
         elif path.startswith("/api/job/"):
             j = _jobs.get(path.rsplit("/", 1)[-1])
             self._json(200 if j else 404, j or {"error": "no such job"})
@@ -796,7 +1013,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?")[0]
-        if path not in ("/api/action", "/api/onboard", "/api/simulate"):
+        if path not in ("/api/action", "/api/onboard", "/api/simulate", "/api/chain"):
             return self._json(404, {"error": "not found"})
         try:
             n = min(int(self.headers.get("Content-Length") or 0), 4096)
@@ -804,6 +1021,8 @@ class Handler(BaseHTTPRequestHandler):
             name = body.get("action", "")
         except Exception:
             return self._json(400, {"ok": False, "seconds": 0, "output": "bad JSON", "error": "bad JSON"})
+        if path == "/api/chain":  # read one vendor's own sub-processors (real sites only), in the background
+            return self._json(*_start_chain(str(body.get("slug") or "")))
         if path == "/api/onboard":
             url = str(body.get("url") or "").strip()
             if not url or len(url) > 300 or not re.match(r"^(https?://)?[A-Za-z0-9.-]+(:\d+)?(/[\w./-]*)?$", url):
@@ -811,18 +1030,16 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(*_launch("onboard", _onboard, url))
         if path == "/api/simulate":
             sc = str(body.get("scenario") or "")
-            if sc == "custom":  # Tinybird adds a company the user names, no location listed: the agent follows its URL
-                name, url = str(body.get("name") or "").strip(), str(body.get("url") or "").strip()
+            if sc not in SIM_SCENARIOS:
+                return self._json(400, {"error": f"unknown scenario (allowed: {', '.join(SIM_SCENARIOS)})"})
+            name, url = str(body.get("name") or "").strip(), str(body.get("url") or "").strip()
+            if sc == "custom":
                 if not re.match(r"^[\w .,&'()-]{2,60}$", name):
                     return self._json(400, {"error": "enter the company's name"})
                 if len(url) > 200 or not re.match(r"^(https?://)?[A-Za-z0-9.-]+\.[A-Za-z]{2,}(:\d+)?(/[\w./-]*)?$", url):
                     return self._json(400, {"error": "enter the company's website, like https://example.com"})
                 url = url if re.match(r"^https?://", url) else "https://" + url
-                cmd = INJECT + ["add-subprocessor", "--vendor", "tinybird", "--name", name, "--country", "", "--url", url]
-                return self._json(*_launch("simulate", _simulate, sc, cmd, f"Added {name} ({url}) to Tinybird's sub-processor list, with no location listed"))
-            if sc not in SCENARIOS:
-                return self._json(400, {"error": f"unknown scenario (allowed: {', '.join(SCENARIOS)})"})
-            return self._json(*_launch("simulate", _simulate, sc))
+            return self._json(*_launch("simulate", _real_simulate, sc, str(body.get("slug") or ""), name, url))
         code, body = run_action(str(name))
         self._json(code, body)
 
