@@ -436,7 +436,7 @@ _HINT = re.compile(r"trust|legal|privacy|dpa|gdpr|security|compliance", re.I)
 _ALINK = re.compile(r"""<a\b[^>]*?href=["']([^"'#]+)["'][^>]*>(.*?)</a>""", re.I | re.S)
 _ARCHIVE = re.compile(r"archive|preview|/\d{4}-\d{2}-\d{2}|-20\d{6}", re.I)
 _SKIP_URL = re.compile(r"log-?in|sign-?in|sign-?up|contact-sales|pricing|[?&](next|redirect|return)", re.I)
-_LOCALE = re.compile(r"^/(?!en(?:[-_][a-z]{2})?/)[a-z]{2}(?:[-_][a-zA-Z]{2})?/")
+_LOCALE = re.compile(r"^/(?:intl/)?(?!en(?:[-_][a-z]{2})?/)[a-z]{2}(?:[-_][a-zA-Z]{2})?/")
 _FILE_HOSTS = ("amazonaws.com", "cloudfront.net", "googleusercontent.com", "googleapis.com", "windows.net", "github.io",
                "githubusercontent.com", "notion.site", "sharepoint.com", "dropbox.com", "box.com")
 _OK_PLACES = {"usa", "us", "u.s.", "u.s", "u.s.a.", "united states of america", "united state of america", "america", "uk",
@@ -607,15 +607,23 @@ def _review(loc: str) -> list[str]:
     rest = re.sub(r"\(.*?\)", " ", (loc or "").replace("\\n", " ").lower())
     for place in ok:  # strip every approved place first, so "United States Australia Japan" leaves just "australia"
         rest = re.sub(r"(?<![a-z])" + re.escape(place) + r"(?![a-z])", ",", rest)
-    out = []
+    named = rest.count(",") > (loc or "").count(",")  # the cell named at least one approved place
+    out, unknown = [], []
     for p in re.split(r",|/|;|\n|&|\||\+|\band\b|\bor\b|:", rest):
         p = re.sub(r"\s+", " ", _FILLER.sub(" ", p)).strip(" .*-'\"")
         if not p or not re.search(r"[a-z]{2}", p):
             continue
-        if len(p) > 30:  # prose, not a place: keep only the named countries or vague words inside it
-            out += [c for c in _OTHER_COUNTRIES if c.lower() in p] + [w.title() for w in _VAGUE if re.search(rf"\b{w}\b", p)]
-            continue
-        out.append(p.title() if len(p) > 4 else p.upper())
+        hits = [c for c in _OTHER_COUNTRIES if re.search(r"(?<![a-z])" + re.escape(c.lower()) + r"(?![a-z])", p)]
+        hits = [c for c in hits if not any(c != o and c in o for o in hits)]  # "Korea" inside "South Korea"
+        vague = [w.title() for w in _VAGUE if re.search(rf"(?<![a-z]){w}(?![a-z])", p)]
+        if hits or vague:
+            out += hits + vague
+        elif len(p) <= 30:  # an unrecognised word: a city or state next to a named country, or an unknown place
+            unknown.append(p.title() if len(p) > 4 else p.upper())
+    if not out and not named:  # nothing recognised at all: surface what's there so a person checks it
+        out = unknown
+    if any(x.lower() not in _VAGUE for x in out):  # "Singapore (Asia Pacific)": the country is the finding
+        out = [x for x in out if x.lower() not in _VAGUE]
     return list(dict.fromkeys(out))
 
 
@@ -851,7 +859,11 @@ def _once(job: "_Job", text: str, detail: str) -> None:
 _OTHER_COUNTRIES = ["Singapore", "India", "China", "Hong Kong", "Russia", "Brazil", "Mexico", "Australia", "New Zealand",
                     "South Korea", "Israel", "Turkey", "United Arab Emirates", "Saudi Arabia", "South Africa", "Philippines",
                     "Vietnam", "Indonesia", "Malaysia", "Thailand", "Taiwan", "Argentina", "Chile", "Colombia", "Nigeria",
-                    "Egypt", "Pakistan", "Ukraine", "Belarus", "Kazakhstan"]
+                    "Egypt", "Pakistan", "Ukraine", "Belarus", "Kazakhstan", "Korea", "Uruguay", "Paraguay", "Peru",
+                    "Bolivia", "Ecuador", "Venezuela", "Panama", "Costa Rica", "Honduras", "Guatemala", "El Salvador",
+                    "Dominican Republic", "Jamaica", "Kenya", "Ghana", "Morocco", "Tunisia", "Sri Lanka", "Bangladesh",
+                    "Nepal", "Serbia", "Bosnia", "North Macedonia", "Albania", "Armenia", "Qatar", "Bahrain", "Kuwait",
+                    "Oman", "Jordan", "Lebanon", "Uzbekistan", "Mongolia", "Cambodia", "Myanmar", "Macau"]
 SIM_SCENARIOS = ("new_subprocessor", "moves_country", "custom", "undo")
 
 
