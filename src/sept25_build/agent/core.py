@@ -25,10 +25,13 @@ VERDICT_SCHEMA = {
         "properties": {"i": {"type": "integer"},
                        "allows_training": {"type": ["boolean", "null"]},
                        "customer_data_retention": {"type": "boolean"}},
-        "required": ["i", "allows_training", "customer_data_retention"]}}},
+        "required": ["i", "allows_training", "customer_data_retention"],
+        "additionalProperties": False}}},
     "required": ["items"],
+    "additionalProperties": False,
 }
 LLM_BATCH = 12   # most new sentences judged per call; the rest use the regex verdict
+REVIEW_MAX = 8   # most sentences escalated to the reviewer model per step
 NOTES_MAX = 700
 NOTES_KEEP = 5
 
@@ -72,7 +75,59 @@ def _judge(new_sents: list[tuple[str, str]]) -> tuple[dict[str, dict], dict, str
             elif llm_v:
                 v["by"] = "liquid"
         verdicts[policy.sentence_key(kind, sent)] = v
+    usage = dict(usage, **_second_opinion(verdicts))
     return verdicts, usage, source
+
+
+def _decisive(v: dict) -> bool:
+    return (v["kind"] == "training" and v.get("allows") is True) or \
+           (v["kind"] == "retention" and (v.get("days") or 0) > policy.MAX_RETENTION_DAYS)
+
+
+def _disagrees(v: dict) -> bool:
+    if v["kind"] == "training":
+        return v.get("allows") != policy.trains(v["text"])
+    return v.get("days") != policy.duration_days(v["text"])
+
+
+def _second_opinion(verdicts: dict[str, dict]) -> dict:
+    """Escalate only the sentences that would change a verdict, or where Liquid and the rules
+    disagree, to the stronger reviewer model. Its answer wins; Liquid's is kept for the record."""
+    todo = [v for v in verdicts.values() if _decisive(v) or _disagrees(v)][:REVIEW_MAX]
+    if not todo or not llm.review_available():
+        return {"review_calls": 0}
+    user = "\n".join(f"{i}. {v['text']}" for i, v in enumerate(todo))
+    try:
+        raw, usage = llm.review_call(SYSTEM, user, VERDICT_SCHEMA)
+    except (RuntimeError, ValueError, json.JSONDecodeError):
+        return {"review_calls": 0}
+    out = {int(it["i"]): it for it in raw.get("items", []) if isinstance(it, dict) and "i" in it}
+    for i, v in enumerate(todo):
+        r = out.get(i)
+        if not r:
+            continue
+        before = v.get("allows") if v["kind"] == "training" else v.get("days")
+        if v["kind"] == "training":
+            after = r.get("allows_training") if isinstance(r.get("allows_training"), (bool, type(None))) else before
+            v["allows"] = after
+        else:
+            after = policy.duration_days(v["text"]) if r.get("customer_data_retention") else None
+            v["days"] = after
+        v["first_opinion"] = {"by": v["by"], "value": before}
+        v["by"] = "reviewer-confirmed" if after == before else "reviewer-override"
+    return {"review_calls": 1, "review_input_tokens": usage["input_tokens"],
+            "review_output_tokens": usage["output_tokens"]}
+
+
+def _who_judged(v: dict | None) -> str:
+    """One line for the alert: which model (or rule) made the call."""
+    liquid, reviewer = llm.MODEL.split("/")[-1].removesuffix(":free"), llm.REVIEW_MODEL.split("/")[-1]
+    by = (v or {}).get("by", "")
+    first = liquid if (v or {}).get("first_opinion", {}).get("by") == "liquid" else "the rules"
+    return {"liquid": f"Judged by {liquid}.",
+            "regex": "Judged by rules (LLM unavailable).",
+            "reviewer-confirmed": f"Flagged by {first}; confirmed by {reviewer}.",
+            "reviewer-override": f"{reviewer} overrode {first}'s reading."}.get(by, "")
 
 
 def _facts(verdicts: dict[str, dict]) -> tuple[bool | None, str, int | None, str]:
@@ -242,6 +297,12 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
     facts_changed = (old.training_on_customer_data, old.retention_days) != (new.training_on_customer_data, new.retention_days)
     material = first or subs_changed or facts_changed
     alerts = _sub_alerts(old, new, snap, tick, first) + _clause_alerts(old, new, snap, tick, first)
+    by_text = {v["text"]: v for v in new.sentence_verdicts.values()}
+    for a in alerts:
+        if a.rule in ("R2", "R3"):
+            quote = new.clause_quotes.get("training" if a.rule == "R2" else "retention", "")
+            who = _who_judged(by_text.get(quote[:300]))
+            a.explanation = f"{a.explanation} {who}".strip()
     _update_ledger(old, new, tick)
     if material:
         new.last_material_change_tick = tick
@@ -249,6 +310,7 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
     # 4. Counters replace history: what happened is remembered as numbers, not transcripts.
     kind = "material" if material else "noise" if text_changed else "unchanged"
     for key, inc in [("ticks", 1), (kind, 1), ("llm_calls", int(source == "liquid")),
+                     ("review_calls", usage.get("review_calls", 0)),
                      ("violations", sum(a.kind == "violation" for a in alerts)),
                      ("resolved", sum(a.kind == "resolved" for a in alerts))]:
         c[key] = c.get(key, 0) + inc
@@ -264,7 +326,7 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
 
     log = TickLog(run_id=run_id, tick=tick, agent="nights_watch", vendor=snap.vendor,
                   input_tokens=usage["input_tokens"], output_tokens=usage["output_tokens"],
-                  material=material, llm_calls=int(source == "liquid"),
+                  material=material, llm_calls=int(source == "liquid"), review_calls=usage.get("review_calls", 0),
                   card_tokens=llm.count_tokens(json.dumps(new.prompt_view(), ensure_ascii=False)),
                   latency_ms=int((time.monotonic() - t0) * 1000))
     return new, alerts, log

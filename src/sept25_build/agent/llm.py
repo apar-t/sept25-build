@@ -1,4 +1,9 @@
-"""LLM access for the agent: Liquid LFM2.5, via OpenRouter (default) or a local llama-server.
+"""LLM access for the agent.
+
+Two tiers:
+  - Liquid LFM2.5 judges every new policy sentence (cheap, small, a hackathon sponsor)
+  - a stronger reviewer model (default openai/gpt-5.5 via OpenRouter) gives a second opinion only
+    on the rare sentences that would change a verdict, or where Liquid and the regex disagree
 
     LLM_BACKEND=openrouter  (default when OPENROUTER_API_KEY is set)
         model liquid/lfm-2.5-2.6b:free. Free tier is capped (~50 requests/day without credits),
@@ -35,6 +40,40 @@ _disabled = False      # set by disable(): fixture replays use the regex path to
 def disable() -> None:
     global _disabled
     _disabled = True
+
+
+REVIEW_MODEL = os.environ.get("REVIEW_MODEL", "openai/gpt-5.5")
+_or_key = os.environ.get("OPENROUTER_API_KEY", "")
+_reviewer = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=_or_key or "missing", timeout=30, max_retries=0)
+_review_down = False
+
+
+def review_available() -> bool:
+    return bool(_or_key) and not _disabled and not _review_down and REVIEW_MODEL.lower() != "none"
+
+
+def review_call(system: str, user: str, schema: dict) -> tuple[dict, dict]:
+    """Second-opinion call to the reviewer model. Same contract as json_call."""
+    global _review_down
+    try:
+        r = _reviewer.chat.completions.create(
+            model=REVIEW_MODEL, max_tokens=4000,
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+            response_format={"type": "json_schema", "json_schema": {"name": "out", "strict": True, "schema": schema}},
+            extra_body={"reasoning": {"effort": "low"}},
+        )
+    except (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError) as e:
+        _review_down = True
+        raise RuntimeError(f"reviewer unavailable: {e}") from e
+    except openai.APIError as e:
+        raise RuntimeError(f"reviewer error: {e}") from e
+    text = (r.choices[0].message.content or "") if r.choices else ""
+    m = re.search(r"\{.*\}", text, flags=re.S)
+    if not m:
+        raise ValueError(f"no JSON in reviewer output: {text[:200]!r}")
+    usage = {"input_tokens": r.usage.prompt_tokens if r.usage else 0,
+             "output_tokens": r.usage.completion_tokens if r.usage else 0}
+    return json.loads(m.group(0)), usage
 
 
 def available() -> bool:

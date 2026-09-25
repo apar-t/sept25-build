@@ -210,6 +210,7 @@ class TickLog(BaseModel):
     output_tokens: int = 0
     material: bool = False
     llm_calls: int = 0
+    review_calls: int = 0            # second-opinion calls to the reviewer model (rare by design)
     card_tokens: int = 0             # size of the agent's working context (state card) after this step
     latency_ms: int = 0
     created_at: datetime = Field(default_factory=now)
