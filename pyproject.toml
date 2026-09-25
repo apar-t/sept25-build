@@ -1,0 +1,18 @@
+[project]
+name = "sept25-build"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "nimble-python>=1.6.0",
+    "openai>=3.19.2",
+    "python-dotenv>=1.2.3",
+    "requests>=2.34.2",
+]
+
+[project.scripts]
+sept25-build = "sept25_build:main"
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"

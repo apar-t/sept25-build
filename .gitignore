@@ -1,0 +1,8 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.tinyb
+.DS_Store
+out/
+logs/
