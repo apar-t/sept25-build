@@ -25,7 +25,13 @@ Rules:
   age -R .age-recipients -a -o .env.age .env
   ```
 - The keys are shared and full-access. The RawTree key can read and write the whole account. BFL spends real credits, about $0.03 per image, so don't generate images in loops.
-- Nimble and AWS Bedrock keys are not in `.env` yet.
+- Nimble and AWS Bedrock keys are not in `.env` yet. Ask the user to get them; don't create accounts.
+
+## Plan vs what's set up
+- **"Tinybird" in the plan means RawTree** (rawtree.com, a Tinybird product). We have a RawTree key, not a Tinybird Forward token, so don't run `tb login`.
+  - Use the RawTree HTTP API with the `RAWTREE_API_KEY` / `RAWTREE_DATABASE` headers. See docs/sponsors.md.
+- RawTree database is `default`. The key can't create databases, and other people's tables already live there, so **prefix every table with `nw_`** (`nw_snapshots`, `nw_state_cards`, `nw_alerts`, `nw_ticks`).
+- Inserting into a new table creates it automatically. Queries are read-only SQL.
 
 ## Setup
 ```bash

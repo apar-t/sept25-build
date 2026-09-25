@@ -63,7 +63,7 @@ llama-server -hf LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M --jinja --port 8080 \
   - A 402 means out of credits.
   - Moderation can reject a prompt.
 
-## Nimble: web data (alternate, not in use)
+## Nimble: web data (Night's Watch "observe" step)
 - `nimble_python` (installed), key env var `NIMBLE_API_KEY`. Free trial: 5,000 pages, no card.
 ```python
 from nimble_python import Nimble
