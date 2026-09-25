@@ -1,0 +1,5 @@
+# Public keys that can decrypt .env.age. Add a line, then re-encrypt (see README).
+# apar-t (GitHub SSH key: https://github.com/apar-t.keys)
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMGmnRXu4bbdqKjC085fqz1oqiS7vzdJecDgvgo2cC6V
+# vroy2008 (age key on Venkat's MacBook Air, ~/.config/age/keys.txt)
+age1usa7vns78kmhj85h7k5py46mvqzudjfewyj5mh6uvz7meeg8c9nsl80dfl
