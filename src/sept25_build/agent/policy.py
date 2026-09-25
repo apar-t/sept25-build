@@ -88,6 +88,18 @@ def findings(card: StateCard, snapshot_id: str, tick: int, previous: list[Findin
 _NEGATION = re.compile(r"\b(not|never|no|don't|do not|does not|won't|will not)\b", re.I)
 _DURATION = re.compile(r"(\d+)\s*(day|week|month|year)s?", re.I)
 _UNIT_DAYS = {"day": 1, "week": 7, "month": 30, "year": 365}
+# "train" only counts near model words, so "we train our staff" doesn't turn a vendor red
+_TRAINING = re.compile(r"\btrain\w*\b.{0,80}\b(models?|machine learning|ml|ai|artificial intelligence|algorithms?)\b|"
+                       r"\b(models?|machine learning|ml|ai|artificial intelligence)\b.{0,40}\btrain", re.I)
+_RETENTION = re.compile(r"retain|retention|delet|stored? for|kept for|keep", re.I)
+
+
+def norm(text: str) -> str:
+    return re.sub(r"[^a-z0-9 ]", "", re.sub(r"\s+", " ", text.lower())).strip()
+
+
+def sentences(paragraph: str) -> list[str]:
+    return [s for s in re.split(r"(?<=[.!?])\s+", paragraph) if s.strip()]
 
 
 def to_days(value: float | int | None, unit: str | None) -> int | None:
@@ -96,18 +108,34 @@ def to_days(value: float | int | None, unit: str | None) -> int | None:
     return int(round(float(value) * _UNIT_DAYS.get(unit.lower().rstrip("s"), 1)))
 
 
+def duration_days(sentence: str) -> int | None:
+    """Longest duration mentioned in a sentence, in days. "30 days ... up to 24 months" -> 720."""
+    found = [to_days(int(n), u) for n, u in _DURATION.findall(sentence)]
+    return max(found) if found else None
+
+
+def training_sentences(paras: list[str]) -> list[str]:
+    return [s for p in paras for s in sentences(p) if _TRAINING.search(s)]
+
+
+def retention_sentences(paras: list[str]) -> list[str]:
+    return [s for p in paras for s in sentences(p) if _RETENTION.search(s) and _DURATION.search(s)]
+
+
+def trains(sentence: str) -> bool:
+    return not _NEGATION.search(sentence)
+
+
 def heuristic_facts(paras: list[str]) -> dict:
-    """Regex fallback used when the LLM is unavailable or returns junk."""
+    """Regex fallback used only when the LLM is unavailable or returns junk."""
     facts = {"training_on_customer_data": None, "training_quote": "", "retention_days": None, "retention_quote": ""}
     for p in paras:
-        for sent in re.split(r"(?<=[.!?])\s+", p):
-            low = sent.lower()
-            if "train" in low and facts["training_quote"] == "":
+        for sent in sentences(p):
+            if _TRAINING.search(sent) and not facts["training_quote"]:
                 facts["training_on_customer_data"] = not _NEGATION.search(sent)
                 facts["training_quote"] = sent
-            if re.search(r"retain|retention|delet", low) and facts["retention_quote"] == "":
-                m = _DURATION.search(sent)
-                if m:
-                    facts["retention_days"] = to_days(int(m.group(1)), m.group(2))
-                    facts["retention_quote"] = sent
+            if _RETENTION.search(sent) and not facts["retention_quote"]:
+                days = duration_days(sent)
+                if days is not None:
+                    facts["retention_days"], facts["retention_quote"] = days, sent
     return facts

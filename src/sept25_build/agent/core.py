@@ -11,49 +11,78 @@ from ..contracts import COMPANY, RULES, Alert, Snapshot, StateCard, Subprocessor
 from . import llm, policy
 
 SYSTEM = (
-    "You read changes to a vendor's data-processing terms and extract two facts. "
-    "Answer only from the text given. If the text does not mention a fact, return null for it."
+    "You read changed paragraphs from a vendor's data-processing terms. Extract facts ONLY from "
+    "these paragraphs. Copy quotes word for word from the paragraphs. If a paragraph does not "
+    "mention a fact, return null and an empty quote for it."
 )
 FACTS_SCHEMA = {
     "type": "object",
     "properties": {
         "training_on_customer_data": {"type": ["boolean", "null"],
-                                      "description": "true if the vendor may use customer data to train AI/ML models"},
-        "training_quote": {"type": "string", "description": "exact sentence supporting it, or empty"},
-        "retention_value": {"type": ["number", "null"]},
-        "retention_unit": {"type": ["string", "null"], "enum": ["day", "week", "month", "year", None]},
-        "retention_quote": {"type": "string", "description": "exact sentence supporting it, or empty"},
+                                      "description": "true if the vendor may use customer data to train AI/ML models, "
+                                                     "false if it says it won't, null if not mentioned"},
+        "training_quote": {"type": "string", "description": "the sentence that says it, copied exactly, or empty"},
+        "retention_quote": {"type": "string",
+                            "description": "the sentence saying how long customer data is kept, copied exactly, or empty"},
         "is_material": {"type": "boolean",
-                        "description": "false if the change is cosmetic (dates, formatting, wording with the same meaning)"},
+                        "description": "false if the change is cosmetic (dates, formatting, same meaning)"},
         "reason": {"type": "string", "description": "one short sentence"},
     },
-    "required": ["training_on_customer_data", "training_quote", "retention_value", "retention_unit",
-                 "retention_quote", "is_material", "reason"],
+    "required": ["training_on_customer_data", "training_quote", "retention_quote", "is_material", "reason"],
 }
 NOTES_MAX = 600
 
 
+def _ground(quote: str, changed: list[str]) -> str:
+    """The full sentence in `changed` that contains `quote`, or "" if the model made it up."""
+    q = policy.norm(quote)
+    if len(q) < 12:
+        return ""
+    for p in changed:
+        for sent in policy.sentences(p):
+            if q in policy.norm(sent) or policy.norm(sent) in q:
+                return sent
+    return ""
+
+
 def _extract(card: StateCard, changed: list[str]) -> tuple[dict, dict, str]:
-    """Ask Liquid what the changed text means. Falls back to regexes if the model is unavailable."""
-    known = {"training_on_customer_data": card.training_on_customer_data,
-             "retention_days": card.retention_days, "quotes": card.clause_quotes}
-    user = (f"Facts currently on file for {card.display_name}:\n{json.dumps(known)}\n\n"
-            "New or changed paragraphs in their terms:\n" + "\n\n".join(f"- {p}" for p in changed))
+    """What does the changed text mean for R2 (training) and R3 (retention)?
+
+    Division of labour, because a 2.6B model echoes context and fumbles units:
+      - regex decides WHICH sentences can be about training/retention at all (no candidate = no fact)
+      - Liquid decides the meaning of those sentences (e.g. "we don't sell data, but may train on it")
+      - its answer only counts if its quote is one of those candidate sentences; otherwise regex decides
+      - retention days are always parsed from the sentence in code
+    """
+    facts = {"training_on_customer_data": None, "training_quote": "", "retention_days": None,
+             "retention_quote": "", "reason": ""}
+    t_cands, r_cands = policy.training_sentences(changed), policy.retention_sentences(changed)
+    usage, source, out = {"input_tokens": 0, "output_tokens": 0}, "regex", {}
     if llm.available():
+        user = f"Changed paragraphs in {card.display_name}'s terms:\n\n" + "\n\n".join(f"- {p}" for p in changed)
         for _ in range(2):
             try:
                 out, usage = llm.json_call(SYSTEM, user, FACTS_SCHEMA)
-                facts = {
-                    "training_on_customer_data": out.get("training_on_customer_data"),
-                    "training_quote": out.get("training_quote") or "",
-                    "retention_days": policy.to_days(out.get("retention_value"), out.get("retention_unit")),
-                    "retention_quote": out.get("retention_quote") or "",
-                    "reason": out.get("reason") or "",
-                }
-                return facts, usage, "liquid"
+                source = "liquid"
+                break
             except (ValueError, json.JSONDecodeError):
                 continue
-    return policy.heuristic_facts(changed) | {"reason": "regex fallback"}, {"input_tokens": 0, "output_tokens": 0}, "regex"
+            except RuntimeError as e:  # rate limit / backend down: don't burn more requests
+                facts["reason"] = f"LLM unavailable: {e}"[:200]
+                break
+    facts["reason"] = facts["reason"] or out.get("reason") or ("regex" if source == "regex" else "")
+
+    if t_cands:
+        t_sent = _ground(out.get("training_quote") or "", changed)
+        if t_sent in t_cands and isinstance(out.get("training_on_customer_data"), bool):
+            facts["training_on_customer_data"], facts["training_quote"] = out["training_on_customer_data"], t_sent
+        else:
+            facts["training_on_customer_data"], facts["training_quote"] = policy.trains(t_cands[0]), t_cands[0]
+    if r_cands:
+        r_sent = _ground(out.get("retention_quote") or "", changed)
+        r_sent = r_sent if r_sent in r_cands else r_cands[0]
+        facts["retention_days"], facts["retention_quote"] = policy.duration_days(r_sent), r_sent
+    return facts, usage, source
 
 
 def _alert(card: StateCard, snap: Snapshot, tick: int, kind: str, rule: str, title: str,

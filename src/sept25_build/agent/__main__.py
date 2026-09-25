@@ -1,7 +1,8 @@
 """Run the agent.
 
     uv run python -m sept25_build.agent              # one live tick against RawTree
-    uv run python -m sept25_build.agent --fixtures   # replay fixtures/snapshots in memory, print everything
+    uv run python -m sept25_build.agent --fixtures   # replay fixtures/snapshots in memory (regex, no LLM calls)
+    uv run python -m sept25_build.agent --fixtures --llm     # same with Liquid (~10 OpenRouter requests)
     uv run python -m sept25_build.agent --fixtures --write   # same, but also write results to RawTree
 """
 
@@ -14,12 +15,14 @@ from . import MemoryStore, RawTreeStore, llm, run_tick
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "snapshots"
 
 
-def replay(write: bool) -> None:
+def replay(write: bool, use_llm: bool) -> None:
+    if not use_llm:
+        llm.disable()  # OpenRouter free tier is ~50 requests/day; opt in with --llm
     store = MemoryStore()
     files = sorted(FIXTURES.glob("*.json"))
     baselines = [f for f in files if f.name.startswith("baseline_")]
     mirror = [f for f in files if f.name.startswith("mirror_")]
-    print(f"LLM: {'Liquid at ' + llm.BASE_URL if llm.available() else 'NOT RUNNING, using regex fallback'}\n")
+    print(f"LLM: {llm.describe()} (regex fallback if unavailable)\n")
     for f in [None] + mirror[1:]:
         batch = baselines + [mirror[0]] if f is None else [f]
         store.snapshots += [Snapshot.model_validate_json(p.read_text()) for p in batch]
@@ -50,9 +53,10 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--fixtures", action="store_true")
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--llm", action="store_true", help="use the real LLM in --fixtures (costs requests)")
     args = ap.parse_args()
     if args.fixtures:
-        replay(args.write)
+        replay(args.write, args.llm)
     else:
         for a in run_tick():
             print(f"{a.kind} {a.rule} {a.title}")
