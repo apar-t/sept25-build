@@ -25,10 +25,15 @@ def vendor_for(sub: Subprocessor) -> str | None:
 def link(cards: dict[str, StateCard]) -> list[StateCard]:
     """Set depends_on / exposed_via on every card. Returns the cards whose links changed."""
     base = {v: v.removesuffix("-mirror") for v in cards}          # the mirror stands in for its vendor
+    node = {}                                                      # vendor slug -> the card that represents it
+    for v in cards:
+        node.setdefault(base[v], v)
+        if v == base[v]:
+            node[base[v]] = v                                      # a real (non-mirror) card wins if both exist
     deps = {}
     for v, c in cards.items():
         targets = {vendor_for(s) for s in c.subprocessors} - {None, base[v]}
-        deps[v] = sorted(t for t in targets if t in cards)
+        deps[v] = sorted(node[t] for t in targets if t in node)
 
     def reach(start: str) -> list[str]:
         seen, stack, red = {start}, list(deps[start]), []
