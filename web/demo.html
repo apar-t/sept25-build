@@ -390,7 +390,7 @@ function showConnect() {
   app.innerHTML = `
     ${topBar(S.ov && S.ov.watching ? `<button class="link-btn" id="back" type="button">Back to dashboard</button>` : "")}
     <main class="hero nhero">
-      <div class="n-pill"><b>New</b><span>Finds any company's sub-processor list</span></div>
+      <div class="n-pill"><b>New</b><span>Now reads real companies' sub-processor lists</span></div>
       <h1 class="n-h1">Compliance<br><em>for <span class="n-word" id="nword">fintechs</span><i class="n-caret" aria-hidden="true"></i></em></h1>
       <p class="n-sub">Know the moment a vendor breaks your privacy policy.</p>
       <form id="connect" class="n-form" novalidate>
@@ -831,7 +831,7 @@ async function boot() {
   try { await refreshOverview(); }
   catch { S.error = "Can't reach the Night's Watch service yet. You can still try to connect."; showConnect(); return; }
   S.url = S.ov.site_url || "";
-  if (S.ov.watching) showWatching(); else showConnect();
+  if (S.ov.watching && location.hash === "#watching") showWatching(); else showConnect();  // "/" opens on the hero
 }
 boot();
 })();
