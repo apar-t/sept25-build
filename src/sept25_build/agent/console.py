@@ -412,11 +412,145 @@ def _launch(kind: str, fn, *args) -> tuple[int, dict]:
             fn(job, *args)
             job.finish()
         except Exception as e:  # noqa: BLE001
-            job.finish(f"{type(e).__name__}: {str(e)[:300]}")
+            job.finish(str(e)[:400] if type(e) is RuntimeError else f"{type(e).__name__}: {str(e)[:300]}")
         finally:
             _lock.release()
     threading.Thread(target=run, daemon=True).start()
     return 200, {"job": job.d["id"]}
+
+
+_SUBP = re.compile(r"sub[\s_-]?processors?", re.I)
+_HINT = re.compile(r"trust|legal|privacy|dpa|gdpr|security|compliance", re.I)
+_ALINK = re.compile(r"""<a\b[^>]*?href=["']([^"'#]+)["'][^>]*>(.*?)</a>""", re.I | re.S)
+_OK_PLACES = {"usa", "us", "u.s.", "u.s.a.", "united states of america", "uk", "u.k.", "great britain", "eu", "eea",
+              "european union", "europe", "european economic area"}
+
+
+def _text(h: str) -> str:
+    import html as _html
+    return re.sub(r"\s+", " ", _html.unescape(re.sub(r"<[^>]+>", " ", h))).strip()
+
+
+def _fetch(u: str, render: bool = False) -> str:
+    """Page HTML via Nimble (direct GET if Nimble errors); '' on any failure or HTTP error."""
+    from .. import ingest
+    try:
+        r = ingest._nimble().extract.run(url=u, formats=["html"], render=render)
+        return (r.data.html or "") if (r.status_code or 200) < 400 else ""
+    except Exception:
+        try:
+            import requests
+            resp = requests.get(u, timeout=8, headers={"User-Agent": "Mozilla/5.0 NightsWatch"})
+            return resp.text if resp.status_code < 400 else ""
+        except Exception:
+            return ""
+
+
+def _links(page: str, base: str, site: str) -> list[tuple[int, str]]:
+    from urllib.parse import urljoin, urlparse
+    out = []
+    for href, label in _ALINK.findall(page):
+        u = urljoin(base, href.strip()).split("#")[0]
+        if not u.startswith("http"):
+            continue
+        both = href + " " + _text(label)
+        h = (urlparse(u).hostname or "").lower()
+        if _SUBP.search(both):
+            out.append((3, u))
+        elif _HINT.search(both) and (h.endswith(site) or h.startswith("trust.")):
+            out.append((1, u))
+    return out
+
+
+def _rows(page: str) -> list[dict]:
+    rows = []
+    for table in re.findall(r"<table\b.*?</table>", page, re.I | re.S):
+        cells = [[_text(c) for c in re.findall(r"<t[hd]\b[^>]*>(.*?)</t[hd]>", tr, re.I | re.S)]
+                 for tr in re.findall(r"<tr\b.*?</tr>", table, re.I | re.S)]
+        cells = [c for c in cells if any(c)]
+        if len(cells) < 2:
+            continue
+        head = [x.lower() for x in cells[0]]
+
+        def col(*ws, skip=()):
+            return next((i for i, x in enumerate(head) if i not in skip and any(w in x for w in ws)), None)
+        ni = col("name", "entity", "processor", "vendor", "provider", "company", "third part")
+        ci = col("location", "country", "countries", "region", "where", "jurisdiction", skip=(ni,))
+        pi = col("purpose", "service", "function", "activit", "description", "nature", skip=(ni, ci))
+        if ci is None:  # a sub-processor table says where data goes; tables without a location column are something else
+            continue
+        for c in cells[1:]:
+            def g(i):
+                return c[i] if i is not None and i < len(c) else ""
+            name = g(ni if ni is not None else 0)
+            if name and len(name) <= 120 and name.lower() not in head:
+                rows.append({"name": name, "purpose": g(pi)[:160], "country": g(ci)[:160]})
+    return rows
+
+
+def _review(loc: str) -> list[str]:
+    """Places in a location cell that aren't on the approved list (or are too vague to check)."""
+    from ..contracts import APPROVED_COUNTRIES
+    ok = {c.lower() for c in APPROVED_COUNTRIES} | _OK_PLACES
+    parts = [re.sub(r"\(.*?\)", "", p).strip(" .*-").lower() for p in re.split(r",|/|;|\n|&|\band\b", loc or "")]
+    return [p.title() if len(p) > 3 else p.upper() for p in parts if p and p not in ok]
+
+
+def _discover(job: _Job, url: str, demo: str) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from urllib.parse import urlparse
+    from ..contracts import VENDOR_ALIASES
+    host = (urlparse(url).hostname or "").lower()
+    site = ".".join(host.split(".")[-2:])
+    s = job.start(f"Looking for {host}'s sub-processor list", url)
+    home = _fetch(url)
+    ranked = sorted(set(_links(home, url, site)), key=lambda x: -x[0]) if home else []
+    guesses = [url + p for p in ("/subprocessors", "/sub-processors", "/legal/subprocessors", "/legal/sub-processors",
+                                 "/trust", "/legal", "/privacy")]
+    todo = list(dict.fromkeys([u for _, u in ranked] + guesses))[:12]
+    seen, pages = set(), {}
+
+    def grab(batch):
+        batch = [u for u in batch if u not in seen][:12]
+        seen.update(batch)
+        with ThreadPoolExecutor(8) as pool:
+            for u, pg in zip(batch, pool.map(_fetch, batch)):
+                if pg:
+                    pages[u] = pg
+        s["detail"] = f"Checked {len(seen)} pages on {site} via Nimble"
+    grab(todo)
+    deeper = [u for pg_url, pg in list(pages.items()) for sc, u in _links(pg, pg_url, site) if sc == 3]
+    grab(deeper)  # one level down: trust / legal pages usually link to the sub-processor list
+
+    def score(u):
+        return (len(_rows(pages[u])) if _SUBP.search(pages[u]) else 0, bool(_SUBP.search(u)))
+    best = max(pages, key=score, default=None)
+    rows = _rows(pages[best]) if best and score(best)[0] else []
+    if not rows:  # JS-rendered trust centers: render the most likely page and try again
+        cands = [u for u in pages if _SUBP.search(u) or _SUBP.search(pages[u])]
+        for u in sorted(cands, key=lambda u: not _SUBP.search(u))[:2]:
+            s["detail"] = f"Rendering {u} via Nimble"
+            pg = _fetch(u, render=True)
+            if _rows(pg):
+                best, rows = u, _rows(pg)
+                break
+    if not rows:
+        raise RuntimeError(f"Couldn't find a readable sub-processor list on {host} (checked {len(seen)} pages). "
+                           f"Try the page's direct URL, or the demo trust center: {demo}")
+    rows = list({r["name"].lower(): r for r in rows}.values())
+    s["detail"] = f"Found it: {best}"
+    s = job.start("Reading the sub-processors", best)
+    watched = {}
+    for r in rows:
+        r["review"] = _review(r["country"]) if r["country"] else []
+        low = r["name"].lower()
+        r["watched"] = next((v for v, al in VENDOR_ALIASES.items() if any(a in low for a in al)), "")
+    s["detail"] = f"{len(rows)} sub-processors" + (f", {sum(1 for r in rows if r['watched'])} already watched by Night's Watch" if any(r["watched"] for r in rows) else "")
+    s = job.start("Checking locations against your approved countries")
+    bad = [r for r in rows if r["review"]]
+    nol = [r for r in rows if not r["country"]]
+    s["detail"] = (f"{len(bad)} need review" if bad else "All listed locations are approved") + (f"; {len(nol)} list no location" if nol else "")
+    job.d["report"] = {"page": best, "host": host, "rows": rows[:80], "total": len(rows), "demo": demo}
 
 
 def _onboard(job: _Job, url: str) -> None:
@@ -429,6 +563,11 @@ def _onboard(job: _Job, url: str) -> None:
     if not re.match(r"^https?://", url):
         url = "https://" + url
     url = re.sub(r"/(subprocessors|privacy|terms)$", "", url)
+    from urllib.parse import urlparse
+    demo = _site_url()
+    host = (urlparse(url).hostname or "").lower()
+    if demo and host not in (urlparse(demo).hostname, "localhost", "127.0.0.1"):
+        return _discover(job, url, demo)  # any other website: find its sub-processor page, read it, check locations
     s = job.start("Reading your sub-processor list", url + "/subprocessors")
     html, via = ingest._read(url + "/subprocessors")
     slugs = [x for x in dict.fromkeys(re.findall(r"/vendors/([a-z0-9-]+)/", html)) if x in VENDORS]
@@ -604,7 +743,8 @@ class Handler(BaseHTTPRequestHandler):
             name = path[len("/about/"):] or "index.html"
             f = (WEB_CONSOLE.parent / name).resolve()
             ctype = {".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "text/javascript",
-                     ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".ico": "image/x-icon"}
+                     ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".ico": "image/x-icon",
+                     ".json": "application/json"}
             if path == "/about":
                 self.send_response(301); self.send_header("Location", "/about/"); self.end_headers()
             elif f.parent == WEB_CONSOLE.parent.resolve() and f.is_file() and f.suffix in ctype:
