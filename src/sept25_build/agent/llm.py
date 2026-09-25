@@ -8,12 +8,16 @@ Two tiers:
     LLM_BACKEND=openrouter  (default when OPENROUTER_API_KEY is set)
         model liquid/lfm-2.5-2.6b:free. Free tier is capped (~50 requests/day without credits),
         so the agent only calls it when a policy paragraph actually changed.
-    LLM_BACKEND=local       llama-server at LFM_BASE_URL (see AGENTS.md "Setup")
+    LLM_BACKEND=local       llama-server at LOCAL_URL (LOCAL_LFM_URL, or LFM_BASE_URL if it is localhost)
+
+A 429/timeout pauses that backend for COOLDOWN_S (60s) instead of for the whole long-running process;
+disable() is permanent (fixture replays).
 """
 
 import json
 import os
 import re
+import time
 
 import openai
 import requests
@@ -23,7 +27,10 @@ from openai import OpenAI
 load_dotenv()
 
 BACKEND = os.environ.get("LLM_BACKEND") or ("openrouter" if os.environ.get("OPENROUTER_API_KEY") else "local")
-LOCAL_URL = os.environ.get("LOCAL_LFM_URL", "http://localhost:8080/v1")  # also the tokenizer for token counts
+_lfm_url = os.environ.get("LFM_BASE_URL", "")
+# local llama-server (also the tokenizer for token counts): LOCAL_LFM_URL, else a localhost LFM_BASE_URL, else :8080
+LOCAL_URL = os.environ.get("LOCAL_LFM_URL") or (
+    _lfm_url if ("localhost" in _lfm_url or "127.0.0.1" in _lfm_url) else "http://localhost:8080/v1")
 if BACKEND == "openrouter":
     BASE_URL = "https://openrouter.ai/api/v1"
     MODEL = os.environ.get("OPENROUTER_MODEL", "liquid/lfm-2.5-2.6b:free")
@@ -33,8 +40,9 @@ else:
     MODEL = "LFM2.5-2.6B"
     _key = os.environ.get("LFM_API_KEY", "local")
 _client = OpenAI(base_url=BASE_URL, api_key=_key or "missing", timeout=30, max_retries=0)
-_rate_limited = False  # after a 429 or timeout, stop calling the backend for this process (circuit breaker)
-_disabled = False      # set by disable(): fixture replays use the regex path to save quota
+COOLDOWN_S = 60
+_down_until = 0.0      # after a 429 or timeout, skip the backend until this monotonic time (circuit breaker)
+_disabled = False      # set by disable(): fixture replays use the regex path to save quota (permanent)
 
 
 def disable() -> None:
@@ -45,16 +53,17 @@ def disable() -> None:
 REVIEW_MODEL = os.environ.get("REVIEW_MODEL", "openai/gpt-5.6-sol")
 _or_key = os.environ.get("OPENROUTER_API_KEY", "")
 _reviewer = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=_or_key or "missing", timeout=30, max_retries=0)
-_review_down = False
+_review_down_until = 0.0
 
 
 def review_available() -> bool:
-    return bool(_or_key) and not _disabled and not _review_down and REVIEW_MODEL.lower() != "none"
+    return (bool(_or_key) and not _disabled and time.monotonic() >= _review_down_until
+            and REVIEW_MODEL.lower() != "none")
 
 
 def review_call(system: str, user: str, schema: dict) -> tuple[dict, dict]:
     """Second-opinion call to the reviewer model. Same contract as json_call."""
-    global _review_down
+    global _review_down_until
     try:
         r = _reviewer.chat.completions.create(
             model=REVIEW_MODEL, max_tokens=4000,
@@ -63,8 +72,8 @@ def review_call(system: str, user: str, schema: dict) -> tuple[dict, dict]:
             extra_body={"reasoning": {"effort": "low"}},
         )
     except (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError) as e:
-        _review_down = True
-        raise RuntimeError(f"reviewer unavailable: {e}") from e
+        _review_down_until = time.monotonic() + COOLDOWN_S
+        raise RuntimeError(f"reviewer unavailable (pausing {COOLDOWN_S}s): {e}") from e
     except openai.APIError as e:
         raise RuntimeError(f"reviewer error: {e}") from e
     text = (r.choices[0].message.content or "") if r.choices else ""
@@ -79,7 +88,7 @@ def review_call(system: str, user: str, schema: dict) -> tuple[dict, dict]:
 def available() -> bool:
     if _disabled:
         return False
-    if _rate_limited:
+    if time.monotonic() < _down_until:
         return False
     if BACKEND == "openrouter":
         return bool(_key)
@@ -90,6 +99,11 @@ def available() -> bool:
 
 
 def describe() -> str:
+    if _disabled:
+        return "off (rules only)"
+    left = _down_until - time.monotonic()
+    if left > 0:
+        return f"{MODEL} via {BACKEND} (cooling down {int(left) + 1}s)"
     return f"{MODEL} via {BACKEND}" + ("" if available() else " (UNAVAILABLE)")
 
 
@@ -108,7 +122,7 @@ def json_call(system: str, user: str, schema: dict, max_tokens: int = 2500) -> t
 
     Raises ValueError on unparseable output, RuntimeError if the backend refuses (rate limit etc.).
     """
-    global _rate_limited
+    global _down_until
     try:
         r = _client.chat.completions.create(
             model=MODEL, temperature=0.1, max_tokens=max_tokens,
@@ -117,11 +131,11 @@ def json_call(system: str, user: str, schema: dict, max_tokens: int = 2500) -> t
             extra_body={"top_k": 50},
         )
     except openai.RateLimitError as e:
-        _rate_limited = True
-        raise RuntimeError(f"{BACKEND} rate limit: {e}") from e
+        _down_until = time.monotonic() + COOLDOWN_S
+        raise RuntimeError(f"{BACKEND} rate limit (pausing {COOLDOWN_S}s): {e}") from e
     except (openai.APITimeoutError, openai.APIConnectionError) as e:
-        _rate_limited = True  # a hung backend would otherwise stall every vendor for 30s
-        raise RuntimeError(f"{BACKEND} unreachable: {e}") from e
+        _down_until = time.monotonic() + COOLDOWN_S  # a hung backend would otherwise stall every vendor for 30s
+        raise RuntimeError(f"{BACKEND} unreachable (pausing {COOLDOWN_S}s): {e}") from e
     except openai.APIError as e:
         raise RuntimeError(f"{BACKEND} error: {e}") from e
     if not r.choices:

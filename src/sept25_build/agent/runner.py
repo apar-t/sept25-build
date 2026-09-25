@@ -5,6 +5,7 @@
     uv run python -m sept25_build.agent.runner --every 10 --cycles 3 --adaptive
     uv run python -m sept25_build.agent.runner --fetch --agent       # + the tool-using agent (GPT-5.6 Sol)
     uv run python -m sept25_build.agent.runner --store file:.nw_state   # durable local store instead
+    uv run python -m sept25_build.agent.runner --narrate                # print each decision (demo)
 
 What makes it long-horizon-safe:
   - Memory lives in the store, not the process. On start it RECOVERS: loads every vendor's latest
@@ -28,7 +29,7 @@ from pathlib import Path
 
 from .. import rawtree
 from ..contracts import TABLES, now
-from . import MemoryStore, RawTreeStore, llm, run_tick
+from . import MemoryStore, RawTreeStore, llm, narrate, run_tick
 from .core import memory_ops, step
 
 LEASE_SECS = 90
@@ -125,7 +126,9 @@ def main() -> None:
     ap.add_argument("--takeover", action="store_true")
     ap.add_argument("--no-llm", action="store_true")
     ap.add_argument("--agent", action="store_true", help="let the tool-using agent investigate open questions")
+    ap.add_argument("--narrate", action="store_true", help="print what the agent does, step by step (demo)")
     args = ap.parse_args()
+    narrate.enabled = args.narrate
     if args.no_llm:
         llm.disable()
 

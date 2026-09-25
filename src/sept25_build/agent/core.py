@@ -8,7 +8,7 @@ import json
 import time
 
 from ..contracts import COMPANY, RULES, Alert, MemoryOp, Snapshot, StateCard, Subprocessor, TickLog, sha
-from . import llm, policy
+from . import llm, narrate, policy
 
 SYSTEM = (
     "You judge numbered sentences from a vendor's data-processing terms. For each sentence answer:\n"
@@ -33,7 +33,7 @@ VERDICT_SCHEMA = {
 LLM_BATCH = 12   # most new sentences judged per call; the rest use the regex verdict
 REVIEW_MAX = 8   # most sentences escalated to the reviewer model per step
 NOTES_MAX = 700
-NOTES_KEEP = 5
+NOTES_KEEP = 3
 
 
 def _judge(new_sents: list[tuple[str, str]]) -> tuple[dict[str, dict], dict, str]:
@@ -47,6 +47,7 @@ def _judge(new_sents: list[tuple[str, str]]) -> tuple[dict[str, dict], dict, str
     usage, source, out = {"input_tokens": 0, "output_tokens": 0}, "regex", {}
     batch = new_sents[:LLM_BATCH]
     if batch and llm.available():
+        t0 = time.monotonic()
         user = "\n".join(f"{i}. {s}" for i, (_, s) in enumerate(batch))
         for _ in range(2):
             try:
@@ -58,6 +59,11 @@ def _judge(new_sents: list[tuple[str, str]]) -> tuple[dict[str, dict], dict, str
                 continue
             except RuntimeError:  # rate limit / timeout: don't burn more requests
                 break
+        narrate.say(f"  Liquid {llm.MODEL} via {llm.BACKEND} judged {narrate.n(len(batch), 'new sentence')} in "
+                    f"{time.monotonic() - t0:.1f}s" if source == "liquid" else
+                    f"  Liquid {llm.MODEL} via {llm.BACKEND} failed; rules judged {narrate.n(len(new_sents), 'new sentence')}")
+    elif new_sents:
+        narrate.say(f"  rules only (LLM off): {narrate.n(len(new_sents), 'new sentence')}")
     verdicts = {}
     for i, (kind, sent) in enumerate(new_sents):
         v = {"kind": kind, "text": sent[:300], "by": "regex"}
@@ -95,11 +101,15 @@ def _second_opinion(verdicts: dict[str, dict]) -> dict:
     disagree, to the stronger reviewer model. Its answer wins; Liquid's is kept for the record."""
     todo = [v for v in verdicts.values() if _decisive(v) or _disagrees(v)][:REVIEW_MAX]
     if not todo or not llm.review_available():
+        if todo:
+            narrate.say(f"  reviewer off: {narrate.n(len(todo), 'decisive sentence')} kept the first opinion")
         return {"review_calls": 0}
     user = "\n".join(f"{i}. {v['text']}" for i, v in enumerate(todo))
+    narrate.say(f"  escalating {narrate.n(len(todo), 'decisive/disputed sentence')} to {llm.REVIEW_MODEL}")
     try:
         raw, usage = llm.review_call(SYSTEM, user, VERDICT_SCHEMA)
-    except (RuntimeError, ValueError, json.JSONDecodeError):
+    except (RuntimeError, ValueError, json.JSONDecodeError) as e:
+        narrate.say(f"  reviewer failed ({type(e).__name__}); first opinions stand")
         return {"review_calls": 0}
     out = {int(it["i"]): it for it in raw.get("items", []) if isinstance(it, dict) and "i" in it}
     for i, v in enumerate(todo):
@@ -115,6 +125,10 @@ def _second_opinion(verdicts: dict[str, dict]) -> dict:
             v["days"] = after
         v["first_opinion"] = {"by": v["by"], "value": before}
         v["by"] = "reviewer-confirmed" if after == before else "reviewer-override"
+        if narrate.enabled:
+            first = "Liquid" if v["first_opinion"]["by"] == "liquid" else "the rules"
+            narrate.say(f"  {llm.REVIEW_MODEL.split('/')[-1]} {'confirmed' if after == before else 'overrode'} "
+                        f"{first} ({v['kind']}: {before} -> {after}): \"{' '.join(v['text'].split())[:70]}\"")
     return {"review_calls": 1, "review_input_tokens": usage["input_tokens"],
             "review_output_tokens": usage["output_tokens"]}
 
@@ -161,10 +175,14 @@ def _update_ledger(old: StateCard, new: StateCard, tick: int) -> None:
     after = {policy.sub_key(s): s for s in new.subprocessors}
     ledger = {k: dict(v) for k, v in old.ledger.items()}
     for k, s in after.items():
+        # setdefault even for already-listed names: a card from before the ledger existed has none
+        e = ledger.setdefault(k, {"name": s.name, "first_seen": tick, "times_added": 0, "last_removed": None})
         if k not in before:
-            e = ledger.setdefault(k, {"name": s.name, "first_seen": tick, "times_added": 0, "last_removed": None})
             e["times_added"] += 1
-        ledger[k]["country"] = s.country
+        e["country"] = s.country
+        found = new.investigations.get(k, {}).get("country")
+        if found:
+            e["found_country"] = found
     for k in before - after.keys():
         if k in ledger:
             ledger[k]["last_removed"] = tick
@@ -174,9 +192,9 @@ def _update_ledger(old: StateCard, new: StateCard, tick: int) -> None:
 def _compact_notes(old_notes: str, line: str, c: dict) -> str:
     """The agent edits its own working notes: keep the last NOTES_KEEP events verbatim and fold
     everything older into one summary line built from the counters. Size stays bounded forever."""
-    recent = [line] + [n for n in old_notes.splitlines() if n and not n.startswith("earlier:")]
+    recent = [line] + [n for n in old_notes.splitlines() if n and not n.startswith("earlier")]
     kept = recent[:NOTES_KEEP]
-    if len(recent) > NOTES_KEEP or any(n.startswith("earlier:") for n in old_notes.splitlines()):
+    if len(recent) > NOTES_KEEP or any(n.startswith("earlier") for n in old_notes.splitlines()):
         kept.append(f"earlier (totals so far): {c.get('ticks', 0)} ticks watched, {c.get('noise', 0) + c.get('unchanged', 0)} "
                     f"discarded, {c.get('violations', 0)} violations, {c.get('resolved', 0)} resolved")
     return "\n".join(kept)[:NOTES_MAX]
@@ -298,6 +316,8 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
         c["fetch_gaps"] = c.get("fetch_gaps", 0) + 1
     subs_changed = ({(policy.sub_key(sp), sp.country) for sp in old.subprocessors}
                     != {(policy.sub_key(sp), sp.country) for sp in new.subprocessors})
+    live = {policy.sub_key(s) for s in new.subprocessors}   # forget investigations of dropped names
+    new.investigations = {k: v for k, v in new.investigations.items() if k in live}
 
     # 2. Policy text. Unchanged paragraphs cost nothing. If anything changed, find the candidate
     #    sentences in the whole policy; only ones never judged before go to Liquid.
@@ -311,6 +331,8 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
         cands = policy.candidates(paras)
         keys = [policy.sentence_key(k, sent) for k, sent in cands]
         new_sents = [cs for cs, key in zip(cands, keys) if key not in old.sentence_verdicts]
+        if not new_sents:
+            narrate.say(f"  policy text changed; all {len(cands)} candidate sentences already judged: no model call")
         judged, usage, source = _judge(new_sents) if new_sents else ({}, usage, "gate")
         new.sentence_verdicts = {key: old.sentence_verdicts.get(key) or judged[key] for key in keys}
         (new.training_on_customer_data, t_quote, new.retention_days, r_quote) = _facts(new.sentence_verdicts)
@@ -327,11 +349,16 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
         trigger = episode.needs_episode(card, new, material)
         if trigger:
             changes = _describe_changes(old, new, first)
-            ep = episode.run_episode(card, new, snap, tick, run_id, trigger, changes, store)
-            if episodes is not None:
-                episodes.append(ep)
-            usage["input_tokens"] += ep.input_tokens
-            usage["output_tokens"] += ep.output_tokens
+            try:
+                ep = episode.run_episode(card, new, snap, tick, run_id, trigger, changes, store)
+            except Exception as e:  # the agent failing must never cost the rules-only verdict
+                narrate.say(f"  episode failed ({type(e).__name__}: {str(e)[:80]}); rules-only verdict stands")
+                ep = None
+            if ep is not None:
+                if episodes is not None:
+                    episodes.append(ep)
+                usage["input_tokens"] += ep.input_tokens
+                usage["output_tokens"] += ep.output_tokens
 
     # 3. Compliance is decided in code, from the rewritten card.
     new.open_findings = policy.findings(new, snap.snapshot_id, tick, old.open_findings)
@@ -364,8 +391,9 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
 
     # 5. Working notes: only events worth remembering get a line; noise just bumps a counter.
     if material or alerts:
-        line = (f"t{tick}: " + ("baseline. " if first else "") +
-                ("; ".join(a.title for a in alerts) if alerts else "material change, still compliant"))
+        line = (f"t{tick}: " + ("baseline. " if first and alerts else "") +
+                ("; ".join(a.title for a in alerts) if alerts else
+                 "baseline, compliant" if first else "material change, still compliant"))
         new.notes = _compact_notes(new.notes, line, c)  # new.notes may already hold the agent's own note
 
     log = TickLog(run_id=run_id, tick=tick, agent="nights_watch", vendor=snap.vendor,

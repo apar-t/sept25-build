@@ -3,13 +3,14 @@
     uv run python -m sept25_build.agent              # one live tick against RawTree
     uv run python -m sept25_build.agent --fixtures   # replay fixtures/snapshots in memory (regex, no LLM calls)
     uv run python -m sept25_build.agent --fixtures --llm     # same with Liquid (~10 OpenRouter requests)
+    uv run python -m sept25_build.agent --fixtures --narrate # + live narration (offline demo plan B)
 """
 
 import argparse
 from pathlib import Path
 
 from ..contracts import Snapshot
-from . import MemoryStore, llm, run_tick
+from . import MemoryStore, llm, narrate, run_tick
 
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "snapshots"
 
@@ -31,7 +32,7 @@ def replay(use_llm: bool) -> None:
         print(f"tick {max(c.tick for c in store.cards.values())} [{label}]")
         for log in t:
             if log.agent == "nights_watch":
-                print(f"   {log.vendor:16} material={log.material!s:5} tokens={log.input_tokens:>5}")
+                print(f"   {log.vendor:16} material={log.material!s:5} card_tokens={log.card_tokens:>5}")
         naive = sum(x.input_tokens for x in t if x.agent == "naive")
         print(f"   naive agent context this tick: {naive} tokens")
         for a in alerts:
@@ -49,7 +50,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--fixtures", action="store_true")
     ap.add_argument("--llm", action="store_true", help="use the real LLM in --fixtures (costs requests)")
+    ap.add_argument("--narrate", action="store_true", help="print what the agent does, step by step (demo)")
     args = ap.parse_args()
+    narrate.enabled = args.narrate
     if args.fixtures:
         replay(args.llm)
     else:
