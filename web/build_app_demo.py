@@ -76,8 +76,6 @@ def build(s: str) -> str:
     rep('<a class="about" href="/about/"', '<a class="about" href="./"')
     # a company the visitor names needs the live service (it opens that company's site): not in a recording
     rep('  {id: "custom", label: "Tinybird adds a company you choose"},\n', '')
-    rep('<p class="hint">Demo company: Night\'s Watch Inc.</p>',
-        '<p class="hint">Demo company: Night\'s Watch Inc. This page replays one real run on demo mirrors of its vendors\' pages.</p>')
     assert "Example Email Delivery" not in s and "fetch(path" in s
     return s
 
