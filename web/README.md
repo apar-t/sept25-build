@@ -10,7 +10,7 @@ Until real data flows, build against fixtures/snapshots and sample alerts.
 Preview: `python3 -m http.server 8780 --directory web`, then open http://localhost:8780 (8765 is taken by `site/serve.py`).
 Live at https://nightswatch.app (Cloudflare Worker in `site-worker/` serving the GitHub Pages copy; www redirects to it; domain registered at Cloudflare). Pages copy: https://vroy2008.github.io/nights-watch/ (GitHub Pages on the public repo `vroy2008/nights-watch`, which holds only `index.html`; this repo stays private). To publish your latest `web/index.html` and the demo (needs push access to that repo):
 ```bash
-d=$(mktemp -d) && git clone -q https://github.com/vroy2008/nights-watch.git "$d" && cp web/index.html web/demo.html web/demo.json "$d/" && git -C "$d" add -A && git -C "$d" commit -qam "Update from sept25-build $(git rev-parse --short HEAD)" && git -C "$d" push -q
+d=$(mktemp -d) && git clone -q https://github.com/vroy2008/nights-watch.git "$d" && cp web/index.html web/demo.html web/guided.html web/demo.json "$d/" && git -C "$d" add -A && git -C "$d" commit -qam "Update from sept25-build $(git rev-parse --short HEAD)" && git -C "$d" push -q
 ```
 
 ## Contact form
@@ -18,4 +18,7 @@ The form posts to a Cloudflare Worker (`contact-worker/`), which commits each su
 Deploy: `cd web/contact-worker && npx wrangler deploy`, then set `CONTACT_URL` in `index.html` to the printed `workers.dev` URL. Set the token once with `npx wrangler secret put GITHUB_TOKEN`.
 
 ## Public demo
-`demo.html` (nightswatch.app/demo.html) is `console.html` replaying a recorded run from `demo.json`, so it needs no server and no keys. Four steps on Tinybird's demo mirror: harmless edit, DataHarvest (R1, found by the agent), training clause (R2), reset (both resolved). `demo.html` is generated: after `console.html` changes run `python3 web/build_demo.py` (it fails loudly if an anchor it edits moved). Regenerate the recording from a rehearsal run with `NW_TABLE_SUFFIX=_e2e uv run python web/export_demo.py` (read-only; picks checks #2-#6), then publish.
+Two static replays of one real recorded run (`demo.json`), so they need no server and no keys:
+- `demo.html` (nightswatch.app/demo.html): lane B's app page (`src/sept25_build/agent/ui/app.html`), built by `python3 web/build_app_demo.py`. Connect, setup, watching, then simulate: add sub-processor, then AI-training clause, then undo (the order the run recorded).
+- `guided.html`: the four-step guided console (`console.html`), built by `python3 web/build_demo.py`.
+Both builders fail loudly if an anchor they edit moved. Regenerate the recording from a rehearsal run with `NW_TABLE_SUFFIX=_e2e uv run python web/export_demo.py` (read-only; checks #2-#6), rebuild, then publish.

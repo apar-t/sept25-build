@@ -1,4 +1,4 @@
-"""Build web/demo.html from web/console.html: same page, but it replays web/demo.json instead of calling the stage
+"""Build web/guided.html from web/console.html: same page, but it replays web/demo.json instead of calling the stage
 console's /api/state and /api/action. Re-run after console.html changes:
 
     python3 web/build_demo.py
@@ -100,5 +100,5 @@ def build(s: str) -> str:
 
 
 if __name__ == "__main__":
-    (WEB / "demo.html").write_text(build((WEB / "console.html").read_text()))
-    print("wrote web/demo.html")
+    (WEB / "guided.html").write_text(build((WEB / "console.html").read_text()))
+    print("wrote web/guided.html")

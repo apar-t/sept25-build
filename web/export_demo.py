@@ -1,4 +1,5 @@
-"""Record the stage console's view of a finished run into web/demo.json, for the public replay page (web/demo.html).
+"""Record the stage console's view of a finished run into web/demo.json, for the public replay pages
+(web/demo.html: lane B's app page; web/guided.html: the guided console).
 
     NW_TABLE_SUFFIX=_e2e uv run python web/export_demo.py
 
@@ -36,6 +37,54 @@ def state_at(tick: int) -> dict:
             "episodes": console._episodes(), "memory_ops": console._memory_ops(), "series": console._series()}
 
 
+def overview_at(tick: int) -> dict:
+    cut[0] = tick
+    console._ocache["data"] = None
+    return console.overview()
+
+
+def _blank_urls(x):
+    """Links into the demo mirror would point at the dead tunnel: drop them (the page then shows plain text)."""
+    if isinstance(x, dict):
+        return {k: ("" if k in ("url", "evidence_url", "site_url") else _blank_urls(v)) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_blank_urls(v) for v in x]
+    return x
+
+
+def app_recording() -> dict:
+    """lane B's /api/overview at each stage, plus job steps rebuilt from what the recorded checks did."""
+    base = overview_at(BASELINE)
+    vs = base["vendors"]
+    onboard = [("Reading your sub-processor list", f"Found {len(vs)} vendors: " + ", ".join(v["name"] for v in vs))]
+    onboard += [(f"Reading {v['name']}'s sub-processors and data terms", f"{v['subprocessor_count']} sub-processors · via Nimble")
+                for v in vs]
+    onboard += [("Checking their terms against your Privacy Policy", f"Checked {len(vs)} vendors' terms against your policy"),
+                ("Building memory", f"{len(vs)} state cards, {base['stats']['memory_tokens']:,} tokens"),
+                (f"Watching {len(vs)} vendors", "")]
+    change = {"new_subprocessor": "Added DataHarvest Ltd to Tinybird's sub-processor list, with no location",
+              "training_clause": "Tinybird's terms now allow training AI models on customer data",
+              "undo": "Put Tinybird's pages back to the original"}
+    stages, sims = {}, {}
+    for scenario, tick in zip(change, STEP_TICKS[1:]):
+        ov = overview_at(tick)
+        tb = next(v for v in ov["vendors"] if v["slug"] == "tinybird")
+        ev = ov["latest_event"] or {}
+        steps = [("Applying the change to Tinybird's demo mirror", change[scenario]),
+                 ("Read Tinybird's pages via Nimble", f"{tb['subprocessor_count']} sub-processors")]
+        if scenario == "new_subprocessor":
+            steps += [(f"Found a sub-processor with no listed location: {x['name']}", "")
+                      for x in tb["subprocessors"] if x["found_by_agent"]]
+        raw = lambda d: str(d or "").lstrip().startswith(("{", "["))  # tool output (JSON, page text): too noisy here
+        steps += [(x["text"], "" if raw(x.get("detail")) else x.get("detail", ""))
+                  for x in ((ev.get("agent") or {}).get("steps") or [])]
+        if ev.get("memory_edits"):
+            steps.append(("Updated its memory", "; ".join(ev["memory_edits"])))
+        steps.append(("Result: " + ev.get("headline", "nothing changed that affects your policies"), ev.get("title", "")))
+        stages[scenario], sims[scenario] = ov, steps
+    return _blank_urls({"base": base, "stages": stages, "onboard": onboard, "sims": sims})
+
+
 def main() -> None:
     if not os.environ.get("NW_TABLE_SUFFIX"):
         sys.exit("set NW_TABLE_SUFFIX (e.g. _e2e) so this reads a rehearsal run, not the stage tables")
@@ -45,8 +94,8 @@ def main() -> None:
     states = [state_at(t) for t in [BASELINE] + STEP_TICKS]
     steps = [{"tick": t, "seconds": round(secs.get(t, 0), 1),
               "alerts": [a for a in s["alerts"] if a["tick"] == t]} for t, s in zip(STEP_TICKS, states[1:])]
-    data = {"suffix": console.SUFFIX, "states": states, "steps": steps, "proof": console._proof()}
-    text = TUNNEL.sub("https://demo-mirror", json.dumps(data, default=str, separators=(",", ":")))
+    data = {"suffix": console.SUFFIX, "states": states, "steps": steps, "proof": console._proof(), "app": app_recording()}
+    text = TUNNEL.sub("", json.dumps(data, default=str, separators=(",", ":")))
     OUT.write_text(text)
     print(f"wrote {OUT} ({len(text) // 1024} KB): baseline #{BASELINE}, steps {STEP_TICKS}")
 
