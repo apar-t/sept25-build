@@ -9,3 +9,8 @@ Until real data flows, build against fixtures/snapshots and sample alerts.
 `index.html` is the landing page: one static file, no build step. `drafts/` holds two alternative designs kept for reference.
 Preview: `python3 -m http.server 8780 --directory web`, then open http://localhost:8780 (8765 is taken by `site/serve.py`).
 The contact form has no backend yet.
+
+Public copy: https://vroy2008.github.io/nights-watch/ (GitHub Pages on the public repo `vroy2008/nights-watch`, which holds only `index.html`; this repo stays private). To publish your latest `web/index.html` (needs push access to that repo):
+```bash
+d=$(mktemp -d) && git clone -q https://github.com/vroy2008/nights-watch.git "$d" && cp web/index.html "$d/" && git -C "$d" commit -qam "Update from sept25-build $(git rev-parse --short HEAD)" && git -C "$d" push -q
+```
