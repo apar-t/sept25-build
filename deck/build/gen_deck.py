@@ -9,6 +9,9 @@ Numbers on slide 4 come from `uv run python -m sept25_build.agent.proof` on orig
 Passes
   1  2026-09-25  first build: cover, problem, how it works, a year simulated
   2  2026-09-25  slide 3 'Live demo': setup and the three injections from the preflight cue card (5 slides)
+  3  2026-09-25  cover: logo moved left of the title, on the same line
+  4  2026-09-25  cover: logo about 20% bigger
+  5  2026-09-25  slide 2 point 2: 'notice' reworded to data policy + the only sign is a page edit
 """
 
 import json
@@ -55,7 +58,8 @@ svg .m{font-family:var(--mono)}
   background:radial-gradient(ellipse 80% 55% at 70% 115%,rgba(95,180,255,.18),transparent 70%),linear-gradient(180deg,#03060e,var(--bg) 60%)}
 .cover .stars{position:absolute;inset:0;width:100%;height:100%}
 .cover .in{position:relative}
-.cover .mark{width:46px;height:46px;color:var(--ice);display:block;margin-bottom:.32in;filter:drop-shadow(0 0 12px rgba(159,216,255,.5))}
+.cover .tl{display:flex;align-items:center;gap:.26in}
+.cover .mark{width:59px;height:76px;flex:0 0 59px;color:var(--ice);display:block;filter:drop-shadow(0 0 12px rgba(159,216,255,.5))}
 .cover h1{font:600 66pt/1 var(--sans);letter-spacing:-.045em;color:var(--ink);margin:0}
 .cover .agenda{font:500 21pt/1.3 var(--sans);color:var(--ice);margin:.42in 0 0;letter-spacing:-.015em}
 .cover .who{position:absolute;left:1.1in;bottom:.65in;font:400 12pt/1.7 var(--mono);color:var(--ink-2);letter-spacing:.02em}
@@ -107,8 +111,8 @@ def slide(title: str, points: list[str], fig: str) -> str:
 
 def cover() -> str:
     return (f'<section class="slide cover">{stars()}<div class="in">'
-            f'<svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="{TOWER}"/></svg>'
-            f"<h1>Night's Watch</h1>"
+            f'<div class="tl"><svg class="mark" viewBox="5 4 14 18" aria-hidden="true"><path fill="currentColor" d="{TOWER}"/></svg>'
+            f"<h1>Night's Watch</h1></div>"
             f'<p class="agenda">The problem · live demo · how it works · a year, simulated</p></div>'
             f'<div class="who">apar-t · rohitenterprise · vroy2008<br>'
             f'Long Horizon Agents Hackathon · San Francisco · 25 Sep 2026</div></section>')
@@ -124,7 +128,7 @@ def problem() -> str:
            f'<p class="cav">One row added. No email sent. Fictional vendor.</p>')
     return slide("Vendors have vendors", [
         "Every vendor passes company data on to its own <b>sub-processors</b>.",
-        "That list can <b>change any day</b>. The notice is an edit to a page like this one.",
+        "Vendors can change this list, or their <b>data policy</b>, <b>any day</b>. The only sign is an edit to a web page like this one.",
         "<b>GDPR Article 28</b> requires notice of the change, with time to object.",
         "The change turns up at the <b>next audit</b>, or from a customer.",
     ], fig)
