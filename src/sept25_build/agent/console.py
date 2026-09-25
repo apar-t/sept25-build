@@ -238,9 +238,11 @@ def _why(a: dict) -> str:
             if m:
                 s = (f"Its new sub-processor {m.group(1)} processes customer data in {m.group(2)}, "
                      f"which is not an approved country")
-                return s + (". Tinybird doesn't list a location; Night's Watch found it on DataHarvest's own website."
-                            .replace("Tinybird", _name(a.get("vendor", ""))).replace("DataHarvest", m.group(1).split()[0])
-                            if "agent followed" in ex else ".")
+                if "agent followed" in ex:
+                    v = re.search(r"\.\s*([^.]+?)(?: \(demo mirror\))? lists no location", ex)
+                    who = v.group(1).strip() if v else "The vendor"
+                    return s + f". {who} doesn't list a location; Night's Watch found it on {m.group(1)}'s own website."
+                return s + "."
         else:
             m = re.match(r"(.+?) no longer processes data in (.+?)\.", ex)
             if m:
