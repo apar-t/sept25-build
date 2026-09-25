@@ -149,6 +149,13 @@ section.block{margin-top:48px}
 .pill.compliant{color:var(--green);border-color:var(--green-line);background:var(--green-bg)}
 .pill.not_compliant{color:var(--red);border-color:var(--red-line);background:var(--red-bg)}
 .pill.exposed{color:var(--amber);border-color:var(--amber-line);background:var(--amber-bg)}
+.pill.review{color:var(--amber);border-color:var(--amber-line);background:var(--amber-bg)}
+.pill.unknown{color:var(--ink-3);border-color:var(--line-2);background:transparent}
+.cols.solo{grid-template-columns:minmax(0,1fr)}
+.sp .rv{color:var(--amber);font-size:12.5px;margin-left:8px}
+.chain-note{font-size:14px;color:var(--ink-2);margin:0}
+.sim-vendor{margin-bottom:4px;font-family:var(--sans)}
+.sim-tag{display:inline-block;font:500 11.5px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--amber);border:1px solid var(--amber-line);background:var(--amber-bg);padding:4px 8px;border-radius:6px;margin-bottom:8px}
 .vpanel{padding:4px 22px 22px;background:var(--wash);border-top:1px solid var(--line)}
 .vpanel[hidden]{display:none}
 .vpanel h4{font:600 11.5px/1 var(--sans);color:var(--ink-3);margin:18px 0 8px;letter-spacing:.08em;text-transform:uppercase}
@@ -268,10 +275,10 @@ const ICON = {
   x: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7m0-7l-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   chev: '<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
-const STATUS_LABEL = {compliant: "Compliant", not_compliant: "Not compliant", exposed: "Exposed"};
+const STATUS_LABEL = {compliant: "Compliant", not_compliant: "Not compliant", exposed: "Exposed", review: "Needs review", unknown: "No location"};
 const SCENARIOS = [
-  {id: "new_subprocessor", label: "Tinybird adds a sub-processor"},
-  {id: "training_clause", label: "Tinybird changes its AI-training clause"},
+  {id: "new_subprocessor", label: "Adds a new sub-processor (DataHarvest Ltd)"},
+  {id: "training_clause", label: "Changes its AI-training clause"},
 ];
 
 // ---------- mock API (?mock=1) ----------
@@ -386,7 +393,7 @@ function showConnect() {
   stopPoll();
   S.screen = "connect";
   document.title = "Night's Watch";
-  const url = S.url || (S.ov && S.ov.site_url) || "";
+  const url = (S.url || (S.ov && S.ov.site_url) || "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
   app.innerHTML = `
     ${topBar(S.ov && S.ov.watching ? `<button class="link-btn" id="back" type="button">Back to dashboard</button>` : "")}
     <main class="hero nhero">
@@ -437,23 +444,6 @@ function showSetup(url) {
   $("#change").addEventListener("click", () => { S.url = url; showConnect(); });
 }
 
-// any real website: what discovery found (read once; continuous watching runs on the demo trust center)
-function showReport(r) {
-  if (S.screen !== "setup") return;
-  const bad = r.rows.filter(x => x.review && x.review.length).length;
-  $("#setup-h").textContent = bad ? `${bad} of ${r.total} sub-processors need review` : `${r.total} sub-processors, all in approved countries`;
-  $("#setup-sub").innerHTML = `Found on <a href="${esc(r.page)}" target="_blank" rel="noopener">${esc(r.page)}</a> and read via Nimble. Checked against your approved countries.`;
-  const box = document.createElement("div"); box.className = "report";
-  box.innerHTML = `<table><thead><tr><th>Sub-processor</th><th>Purpose</th><th>Location</th><th></th></tr></thead><tbody>${
-    r.rows.map(x => `<tr><td>${esc(x.name)}${x.watched ? ` <span class="rp-w">watched</span>` : ""}</td><td>${esc(x.purpose || "")}</td><td>${esc(x.country || "not listed")}</td><td>${
-      x.review && x.review.length ? `<span class="rp-b rp-bad">Review: ${esc(x.review.join(", "))}</span>` : x.country ? `<span class="rp-b rp-ok">Approved</span>` : `<span class="rp-b">No location</span>`}</td></tr>`).join("")
-  }</tbody></table>${r.total > r.rows.length ? `<p class="muted">Showing ${r.rows.length} of ${r.total}.</p>` : ""}
-  <div class="sim-actions" style="margin-top:22px"><button class="btn" type="button" id="to-demo">Watch the demo trust center live</button><button class="link-btn" type="button" id="change2">Check another site</button></div>`;
-  $("#steps").after(box);
-  $("#to-demo").addEventListener("click", () => startOnboard(r.demo));
-  $("#change2").addEventListener("click", () => { S.url = ""; showConnect(); });
-}
-
 async function startOnboard(url) {
   S.url = url;
   showSetup(url);
@@ -475,7 +465,6 @@ async function startOnboard(url) {
     renderStepsInto($("#steps"), job.steps);
   }, async job => {
     if (job.status === "failed") return setupFailed(job.error || "A step failed.");
-    if (job.report) return showReport(job.report);
     S.lastChecked = new Date();
     await refreshOverview();
     showWatching();
@@ -556,7 +545,10 @@ function showWatching() {
 
       <section class="block" aria-labelledby="sim-h">
         <div class="sec-h"><h3 id="sim-h">Simulate a vendor change</h3></div>
-        <p class="sim-intro">Change a vendor's demo mirror the way a real vendor might, then watch Night's Watch catch it.</p>
+        <p class="sim-intro">Pick a vendor and a change, then watch Night's Watch catch it. Only Night's Watch's copy of the list changes; the vendor's real pages don't.</p>
+        <label class="field" for="sim-vendor">Vendor</label>
+        <select class="input sim-vendor" id="sim-vendor"><option value="tinybird" selected>Tinybird</option></select>
+        <p class="field" style="margin-top:18px">Change</p>
         <div class="seg" role="radiogroup" aria-label="Change to simulate">
           ${SCENARIOS.map(s => `<input type="radio" name="scn" id="scn-${s.id}" value="${s.id}" ${S.scenario === s.id ? "checked" : ""}><label for="scn-${s.id}">${esc(s.label)}</label>`).join("")}
         </div>
@@ -582,6 +574,7 @@ function showWatching() {
     </main>`;
   $("#reconnect").addEventListener("click", () => { S.url = site; showConnect(); });
   app.querySelectorAll('input[name="scn"]').forEach(i => i.addEventListener("change", () => { S.scenario = i.value; $("#custom").hidden = i.value !== "custom"; }));
+  $("#sim-vendor").addEventListener("change", e => { S.simVendor = e.target.value; });
   $("#c-name").addEventListener("input", e => { S.cName = e.target.value; });
   $("#c-url").addEventListener("input", e => { S.cUrl = e.target.value; });
   $("#run").addEventListener("click", () => simulate(S.scenario));
@@ -592,6 +585,11 @@ function showWatching() {
     const slug = b.dataset.slug;
     if (S.expanded.has(slug)) S.expanded.delete(slug); else S.expanded.add(slug);
     renderVendors();
+    const v = S.ov && S.ov.real && (S.ov.vendors || []).find(x => x.slug === slug);
+    if (v && S.expanded.has(slug) && (v.chain === "idle" || v.chain === "failed")) {
+      v.chain = "loading"; renderVendors();
+      api("POST", "/api/chain", {slug}).then(() => refreshOverview()).then(() => renderWatchingParts()).catch(() => {});
+    }
   });
   S.eventKey = "";
   renderWatchingParts();
@@ -607,6 +605,22 @@ function renderWatchingParts() {
 
 function renderStatus() {
   const vs = S.ov.vendors || [];
+  if (S.ov.real) {
+    const red = vs.filter(v => v.status === "not_compliant").length;
+    const n = vs.filter(v => v.status === "review" || v.status === "exposed").length;
+    const title = red ? `${plural(red, "vendor")} no longer ${red === 1 ? "complies" : "comply"} with your Privacy Policy`
+      : n ? `${n} of ${plural(vs.length, "sub-processor")} ${n === 1 ? "needs" : "need"} review` : `All ${plural(vs.length, "sub-processor")} are in approved countries`;
+    const src = safeUrl(S.ov.source_page);
+    const bits = red && n ? [`${n} more ${n === 1 ? "needs" : "need"} review`] : [];
+    bits.push(src ? `Read from <a href="${esc(src)}" target="_blank" rel="noopener">${esc(src.replace(/^https?:\/\/(www\.)?/, ""))}</a> via Nimble` : "Read via Nimble");
+    const lc = S.ov.checked_at ? new Date(S.ov.checked_at) : null;
+    if (lc && !isNaN(lc)) bits.push(`last checked ${hhmm(lc)}`);
+    const html = `<div class="card status tone-${red ? "red" : n ? "amber" : "green"}"><span class="mark" aria-hidden="true"></span><div><h2>${esc(title)}</h2><p>${bits.join(" · ")}</p></div></div>`;
+    const el = $("#status");
+    if (el.dataset.sig !== html) { el.innerHTML = html; el.dataset.sig = html; }
+    $("#vend-sub").textContent = vs.length ? "Select one to read its own sub-processors" : "";
+    return;
+  }
   const red = vs.filter(v => v.status === "not_compliant");
   const amber = vs.filter(v => v.status === "exposed");
   let tone = "green", title;
@@ -640,11 +654,13 @@ function renderVendors() {
       const open = S.expanded.has(v.slug);
       const st = STATUS_LABEL[v.status] ? v.status : "compliant";
       const n = v.subprocessor_count != null ? v.subprocessor_count : (v.subprocessors || []).length;
+      const count = S.ov.real ? esc(v.location || "location not listed") + (v.subprocessor_count != null ? ` · ${plural(Number(n), "sub-processor")}` : "")
+                              : plural(Number(n) || 0, "sub-processor");
       const pid = "vp-" + esc(v.slug);
       return `<div class="vrow">
         <button class="vbtn" type="button" data-slug="${esc(v.slug)}" data-f="v-${esc(v.slug)}" aria-expanded="${open}" aria-controls="${pid}">
           <span class="vname">${esc(cleanName(v.name))}</span>
-          <span class="vcount">${plural(Number(n) || 0, "sub-processor")}</span>
+          <span class="vcount">${count}</span>
           <span class="pill ${st}">${STATUS_LABEL[st]}</span>
           ${ICON.chev}
         </button>
@@ -652,6 +668,14 @@ function renderVendors() {
       </div>`;
     }).join("") : `<div class="vpanel muted" style="padding:18px 20px">No vendors yet.</div>`;
   });
+  // an open panel whose chain hasn't been read yet (e.g. after a restart) asks for it once
+  if (S.ov.real) for (const v of vs) {
+    const k = (S.ov.site_url || "") + "|" + v.slug;
+    if (S.expanded.has(v.slug) && v.chain === "idle" && !(S.chainReq || (S.chainReq = new Set())).has(k)) {
+      S.chainReq.add(k);
+      api("POST", "/api/chain", {slug: v.slug}).then(() => refreshOverview()).then(() => renderWatchingParts()).catch(() => {});
+    }
+  }
 }
 
 function vendorPanel(v) {
@@ -667,6 +691,17 @@ function vendorPanel(v) {
     h += `<h4>Why it's exposed</h4><div class="issue amber"><div class="id">It relies on a vendor that no longer complies with your Privacy Policy.</div></div>`;
   }
   const sps = v.subprocessors || [];
+  if (S.ov.real) {
+    if (v.purpose) h += `<h4>What it does for you</h4><p class="chain-note">${esc(v.purpose)}</p>`;
+    h += `<h4>Its sub-processors</h4>`;
+    const simRows = sps.filter(x => x.simulated);
+    const simList = simRows.length ? `<ul class="sp">${simRows.map(x => `<li><span>${esc(x.name)}</span><span class="c">· ${x.country ? esc(x.country) : "location not listed"}</span><span class="tag">simulated</span>${(x.review || []).length ? `<span class="rv">review: ${esc(x.review.join(", "))}</span>` : ""}</li>`).join("")}</ul>` : "";
+    if (v.chain === "loading" || v.chain === "idle") return h + simList + `<p class="chain-note">Reading ${esc(cleanName(v.name))}'s sub-processor list via Nimble…</p>`;
+    if (v.chain !== "done") return h + simList + `<p class="chain-note">${esc(v.chain_error || "Couldn't read its sub-processor list.")}</p>`;
+    const src = safeUrl(v.chain_page);
+    return h + `<ul class="sp">${sps.map(s => `<li><span>${esc(s.name)}</span><span class="c">· ${s.country ? esc(s.country) : "location not listed"}</span>${s.simulated ? `<span class="tag">simulated</span>` : ""}${(s.review || []).length ? `<span class="rv">review: ${esc(s.review.join(", "))}</span>` : ""}</li>`).join("")}</ul>`
+             + (src ? `<p class="chain-note" style="margin-top:10px">Source: <a href="${esc(src)}" target="_blank" rel="noopener">${esc(src)}</a></p>` : "");
+  }
   h += `<h4>Sub-processors</h4>`;
   h += sps.length ? `<ul class="sp">${sps.map(s => {
     const ev = safeUrl(s.evidence_url);
@@ -684,7 +719,7 @@ function renderResult() {
   S.eventKey = key;
   keepOpen(root, () => {
     if (!ev) {
-      root.innerHTML = S.sim === "done" ? `<div class="card result"><div class="head"><span class="mark" style="background:var(--ink-3)" aria-hidden="true"></span><div class="body"><h3>No policy conflict found</h3><p class="why">Night's Watch checked the change and nothing in it conflicts with your Privacy Policy.</p></div></div></div>` : "";
+      root.innerHTML = S.sim === "done" && S.jobScenario !== "undo" ? `<div class="card result"><div class="head"><span class="mark" style="background:var(--ink-3)" aria-hidden="true"></span><div class="body"><h3>No policy conflict found</h3><p class="why">Night's Watch checked the change and nothing in it conflicts with your Privacy Policy.</p></div></div></div>` : "";
       return;
     }
     const vendor = cleanName(ev.vendor);
@@ -707,7 +742,7 @@ function renderResult() {
     const mem = ev.memory_edits || [];
     root.innerHTML = `<div class="card result tone-${bad ? "red" : "green"}">
       <div class="head"><span class="mark" aria-hidden="true"></span><div class="body">
-        <h3>${esc(headline)}</h3>
+        ${ev.simulated ? `<span class="sim-tag">Simulated</span>` : ""}<h3>${esc(headline)}</h3>
         ${ev.why ? `<p class="why">${esc(ev.why)}</p>` : ""}
         ${bad ? policyLink(ev.policy) : ""}
         ${how ? `<details class="disc" data-k="how"><summary>How Night's Watch found this</summary><div class="disc-body">${how}</div></details>` : ""}
@@ -718,6 +753,7 @@ function renderResult() {
 
 function renderFast() {
   const root = $("#fast"); if (!root) return;
+  if (S.ov.real) { root.innerHTML = ""; return; }
   const st = S.ov.stats || {};
   const p = st.proof;
   let rows = `<li><span>Checks run</span><span>${fmt(st.checks)}</span></li>
@@ -755,6 +791,14 @@ function setSimBusy(busy) {
   const run = $("#run"); if (run) run.textContent = busy ? "Running…" : "Run simulation";
 }
 
+// default simulation target: the first vendor that is currently compliant
+function simVendor() {
+  const vs = (S.ov && S.ov.vendors) || [];
+  if (S.simVendor && vs.some(v => v.slug === S.simVendor)) return S.simVendor;
+  const v = vs.find(x => x.status === "compliant") || vs[0];
+  return v ? v.slug : "";
+}
+
 async function simulate(scenario) {
   if (S.job) return;
   S.sim = "running"; S.jobScenario = scenario;
@@ -764,7 +808,8 @@ async function simulate(scenario) {
   const ol = $("#sim-steps"); ol.innerHTML = "";
   renderStepsInto(ol, [{text: scenario === "undo" ? "Undoing changes" : "Starting the simulation", state: "active"}]);
   let r;
-  const body = scenario === "custom" ? {scenario, name: (S.cName || "").trim(), url: (S.cUrl || "").trim()} : {scenario};
+  const body = {scenario, slug: simVendor()};
+  if (scenario === "custom") Object.assign(body, {name: (S.cName || "").trim(), url: (S.cUrl || "").trim()});
   try { r = await api("POST", "/api/simulate", body); }
   catch { return simFailed("Can't reach the Night's Watch service."); }
   if (r.status === 409) return simFailed("Night's Watch is finishing another check. Try again in a moment.");
@@ -820,6 +865,10 @@ window.addEventListener("popstate", () => {
 function setTitle() {
   const vs = (S.ov && S.ov.vendors) || [];
   const red = vs.filter(v => v.status === "not_compliant").length;
+  if (S.ov && S.ov.real && S.screen === "watching") {
+    const n = vs.filter(v => v.status === "review" || v.status === "exposed").length;
+    document.title = red ? `Night's Watch · ${red} not compliant` : n ? `Night's Watch · ${n} need review` : "Night's Watch · all approved"; return;
+  }
   document.title = S.screen === "watching" && red ? `Night's Watch · ${red} vendor${red === 1 ? "" : "s"} not compliant`
                  : S.screen === "watching" ? "Night's Watch · all vendors compliant" : "Night's Watch";
 }

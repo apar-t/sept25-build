@@ -74,8 +74,14 @@ def build(s: str) -> str:
         'n.innerHTML = \'Replay of a real recorded run · <a href="guided.html" style="color:inherit">detailed view</a>\';')
     # "About" is the landing page, which on nightswatch.app sits next to this file
     rep('<a class="about" href="/about/"', '<a class="about" href="./"')
-    # a company the visitor names needs the live service (it opens that company's site): not in a recording
-    rep('  {id: "custom", label: "Tinybird adds a company you choose"},\n', '')
+    # the replay offers the changes the recording has; "moves country" and "a company you choose" need the live
+    # service (they act on the site the user entered), so they stay on the stage laptop
+    a = s.index('const SCENARIOS = [')
+    b = s.index('];', a) + 2
+    s = s[:a] + '''const SCENARIOS = [
+  {id: "new_subprocessor", label: "Adds a new sub-processor (DataHarvest Ltd)"},
+  {id: "training_clause", label: "Changes its AI-training clause"},
+];''' + s[b:]
     # the "New · Now reads real companies' sub-processor lists" pill: a replay reads nothing live
     a = s.index('<div class="n-pill">')
     s = s[:a].rstrip(" ") + s[s.index("</div>", a) + len("</div>\n"):]
@@ -83,6 +89,9 @@ def build(s: str) -> str:
     rep('.n-word{color:#d9a93a;', '.n-word{color:#2f6fae;')
     rep('.n-caret{display:inline-block;width:3px;height:.8em;margin-left:4px;background:#d9a93a;',
         '.n-caret{display:inline-block;width:3px;height:.8em;margin-left:4px;background:#2f6fae;')
+    # the recording only changed Tinybird, so that is the one vendor the replay can simulate
+    a = s.index('<select class="input sim-vendor" id="sim-vendor">') + len('<select class="input sim-vendor" id="sim-vendor">')
+    s = s[:a] + '<option value="tinybird" selected>Tinybird</option>' + s[s.index("</select>", a):]
     assert "Example Email Delivery" not in s and "fetch(path" in s
     return s
 
