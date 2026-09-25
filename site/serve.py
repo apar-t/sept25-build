@@ -78,15 +78,18 @@ def md_to_html(md: str) -> str:
     return "\n".join(out)
 
 
-def page(title: str, body: str, banner: str = "") -> str:
+def page(title: str, body: str, banner: str = "", brand: str = "") -> str:
+    """brand: a plain header (no Trust Center nav), for third-party company profile pages."""
     company = load("company.json")
+    head = (f'<strong>{esc(brand)}</strong>' if brand else
+            f'<a href="/">{esc(company["name"])} Trust Center</a>\n<nav style="display:inline"><a href="/privacy">Privacy</a>'
+            f'<a href="/terms">Terms</a><a href="/subprocessors">Sub-processors</a></nav>')
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc(title)}</title><style>{CSS}</style></head>
 <body>
-<header><div class="wrap"><a href="/">{esc(company["name"])} Trust Center</a>
-<nav style="display:inline"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/subprocessors">Sub-processors</a></nav></div></header>
+<header><div class="wrap">{head}</div></header>
 <main class="wrap">
 {f'<div class="banner" role="note">{esc(banner)}</div>' if banner else ''}
 {body}
@@ -94,6 +97,12 @@ def page(title: str, body: str, banner: str = "") -> str:
 <footer>{esc(company["disclaimer"])}</footer>
 </body></html>
 """
+
+
+def abs_url(url: str, base: str) -> str:
+    """A stored site path like '/companies/dataharvest' -> '<base>/companies/dataharvest' (base comes from the
+    request's Host + X-Forwarded-Proto, so through the tunnel it is the public https URL). Full URLs pass through."""
+    return base + url if url.startswith("/") and base else url
 
 
 def poss(name: str) -> str:
@@ -173,13 +182,19 @@ def r_vendor_index(v: dict) -> str:
     return page(f"{n} (demo mirror)", body, mirror_banner(n))
 
 
-def r_vendor_subs(v: dict) -> str:
+def r_vendor_subs(v: dict, base: str) -> str:
     n = v["display_name"]
-    rows = "\n".join(f"<tr><td>{esc(sp['name'])}</td><td>{esc(sp['purpose'])}</td><td>{esc(sp['country'])}</td></tr>"
+
+    def website(sp: dict) -> str:
+        u = abs_url(sp.get("url", ""), base)
+        return f'<a href="{html.escape(u)}">{esc(u)}</a>' if u else ""
+
+    rows = "\n".join(f"<tr><td>{esc(sp['name'])}</td><td>{esc(sp['purpose'])}</td>"
+                     f"<td>{esc(sp['country']) or '—'}</td><td>{website(sp)}</td></tr>"
                      for sp in v["subprocessors"])
     body = f"""<h1>{esc(n)} sub-processors (demo mirror)</h1>
 <p>{esc(n)} uses the following sub-processors to provide its services.</p>
-<table><thead><tr><th>Name</th><th>Purpose</th><th>Location</th></tr></thead>
+<table><thead><tr><th>Name</th><th>Purpose</th><th>Location</th><th>Website</th></tr></thead>
 <tbody>
 {rows}
 </tbody></table>"""
@@ -192,8 +207,24 @@ def r_vendor_dpa(v: dict) -> str:
                 f"<article>\n{md_to_html(v['dpa_markdown'])}\n</article>", mirror_banner(n))
 
 
-def route(path: str) -> tuple[int, str, str]:
-    """-> (status, content_type, body)"""
+def company_json(co: dict) -> dict:
+    return {"slug": co["slug"], "name": co["name"], "about": co["about"], "headquarters": co["headquarters"],
+            "data_processing_locations": co["data_processing_locations"]}
+
+
+def r_company_profile(co: dict) -> str:
+    hq = co["headquarters"]
+    body = f"""<h1>{esc(co["name"])}</h1>
+<h2>About</h2>
+<p>{esc(co["about"])}</p>
+<h2>Company facts</h2>
+<p>Headquarters: {esc(hq["city"])}, {esc(hq["country"])}</p>
+<p>Data processing locations: {esc(", ".join(co["data_processing_locations"]))}</p>"""
+    return page(co["name"], body, "Fictional company for the Night's Watch hackathon demo.", brand=co["name"])
+
+
+def route(path: str, base: str = "") -> tuple[int, str, str]:
+    """-> (status, content_type, body). base = 'scheme://host' of the request, for absolute links."""
     path = path.split("?", 1)[0].split("#", 1)[0]
     if path != "/":
         path = path.rstrip("/")
@@ -207,23 +238,41 @@ def route(path: str) -> tuple[int, str, str]:
         if sub is None:
             return 200, "text/html; charset=utf-8", r_vendor_index(v)
         if sub == "subprocessors":
-            return 200, "text/html; charset=utf-8", r_vendor_subs(v)
+            return 200, "text/html; charset=utf-8", r_vendor_subs(v, base)
         if sub == "subprocessors.json":
-            data = [{"name": s["name"], "purpose": s["purpose"], "country": s["country"]} for s in v["subprocessors"]]
+            data = [{"name": s["name"], "purpose": s["purpose"], "country": s["country"],
+                     "url": abs_url(s.get("url", ""), base)} for s in v["subprocessors"]]
             return 200, "application/json; charset=utf-8", json.dumps(data, indent=2, ensure_ascii=False) + "\n"
         if sub == "dpa":
             return 200, "text/html; charset=utf-8", r_vendor_dpa(v)
         if sub == "dpa.md":
             return 200, "text/markdown; charset=utf-8", v["dpa_markdown"]
+    m = re.fullmatch(r"/companies/([a-z0-9-]+?)(\.json)?", path)
+    if m and (LIVE / "companies.json").exists():
+        co = next((c for c in load("companies.json") if c["slug"] == m.group(1)), None)
+        if co and m.group(2):
+            return 200, "application/json; charset=utf-8", json.dumps(company_json(co), indent=2, ensure_ascii=False) + "\n"
+        if co:
+            return 200, "text/html; charset=utf-8", r_company_profile(co)
     return 404, "text/html; charset=utf-8", page("Not found", "<h1>404 — Not found</h1><p><a href=\"/\">Back to the Trust Center</a></p>")
 
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "NightsWatchTrust/1.0"
 
+    def _base(self) -> str:
+        """scheme://host as the client saw it. cloudflared passes the public hostname in Host and sets
+        X-Forwarded-Proto: https, so tunnel requests get the public https base."""
+        host = self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or "%s:%s" % self.server.server_address[:2]
+        host = host.split(",")[0].strip()
+        if not re.fullmatch(r"[A-Za-z0-9.\-:\[\]]+", host):
+            host = "%s:%s" % self.server.server_address[:2]
+        proto = (self.headers.get("X-Forwarded-Proto") or "http").split(",")[0].strip().lower()
+        return f"{'https' if proto == 'https' else 'http'}://{host}"
+
     def _send(self, head_only: bool) -> None:
         try:
-            status, ctype, body = route(self.path)
+            status, ctype, body = route(self.path, self._base())
         except Exception as e:  # a half-edited JSON file shouldn't kill the demo
             status, ctype, body = 500, "text/plain; charset=utf-8", f"server error: {e}\n"
         data = body.encode("utf-8")

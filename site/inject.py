@@ -1,6 +1,7 @@
 """Inject changes into the demo mirror data in site/live/ (served by site/serve.py). Stdlib only.
 
     uv run python site/inject.py add-subprocessor --vendor tinybird --name "DataHarvest Ltd" --country Singapore
+    uv run python site/inject.py add-subprocessor --vendor tinybird --name "DataHarvest Ltd" --country "" --url /companies/dataharvest
     uv run python site/inject.py remove-subprocessor --vendor tinybird --name "DataHarvest Ltd"
     uv run python site/inject.py change-policy --vendor tinybird --clause training|retention
     uv run python site/inject.py append-clause --vendor tinybird --clause training|retention
@@ -70,9 +71,14 @@ def add_subprocessor(a) -> None:
     if any(s["name"].lower() == a.name.lower() for s in v["subprocessors"]):
         print(f"{a.vendor}: {a.name!r} is already listed; nothing changed")
         return
-    v["subprocessors"].append({"name": a.name, "purpose": a.purpose, "country": a.country})
+    entry = {"name": a.name, "purpose": a.purpose, "country": a.country.strip()}
+    if a.url:
+        entry["url"] = a.url.strip()  # a site path like /companies/x is served as <request base>/companies/x
+    v["subprocessors"].append(entry)
     save(v)
-    print(f"{a.vendor}: added sub-processor {a.name!r} ({a.purpose}; {a.country}) -> {len(v['subprocessors'])} total")
+    where = entry["country"] or "location unknown"
+    link = f"; url {entry['url']}" if a.url else ""
+    print(f"{a.vendor}: added sub-processor {a.name!r} ({a.purpose}; {where}{link}) -> {len(v['subprocessors'])} total")
 
 
 def remove_subprocessor(a) -> None:
@@ -135,7 +141,8 @@ def reset(a) -> None:
         shutil.copy2(src, tmp)
         os.replace(tmp, path(s))
     if not a.vendor:
-        shutil.copy2(SEED / "company.json", LIVE / "company.json")
+        for f in ("company.json", "companies.json"):
+            shutil.copy2(SEED / f, LIVE / f)
     print(f"reset to seed: {', '.join(slugs)}")
 
 
@@ -156,10 +163,14 @@ def status(_a) -> None:
             print(f"{s:9s} (missing)")
             continue
         v = load(s)
-        bad = [f"{sp['name']} ({sp['country']})" for sp in v["subprocessors"] if sp["country"].strip().lower() not in APPROVED]
+        bad = [f"{sp['name']} ({sp['country']})" for sp in v["subprocessors"]
+               if sp["country"].strip() and sp["country"].strip().lower() not in APPROVED]
+        unknown = [sp["name"] + (f" (url {sp['url']})" if sp.get("url") else "")
+                   for sp in v["subprocessors"] if not sp["country"].strip()]
         md = v["dpa_markdown"]
         upd = re.search(r"Last updated: (\S+)", md)
         print(f"{s:9s} subprocessors={len(v['subprocessors'])}  non-approved={', '.join(bad) or 'none'}  "
+              + (f"location-unknown={', '.join(unknown)}  " if unknown else "") +
               f"training={clause_state(md, 'training')}  retention={clause_state(md, 'retention')}  "
               f"last_updated={upd.group(1) if upd else '?'}")
 
@@ -168,7 +179,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Inject changes into the Night's Watch demo mirror (site/live/).")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("add-subprocessor"); p.add_argument("--vendor", required=True)
-    p.add_argument("--name", required=True); p.add_argument("--country", required=True)
+    p.add_argument("--name", required=True)
+    p.add_argument("--country", required=True, help='may be "" (no listed location)')
+    p.add_argument("--url", default="", help="website; a path like /companies/dataharvest is served as an absolute URL")
     p.add_argument("--purpose", default="Data enrichment and analytics"); p.set_defaults(fn=add_subprocessor)
     p = sub.add_parser("remove-subprocessor"); p.add_argument("--vendor", required=True)
     p.add_argument("--name", required=True); p.set_defaults(fn=remove_subprocessor)

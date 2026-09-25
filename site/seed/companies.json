@@ -1,0 +1,9 @@
+[
+  {
+    "slug": "dataharvest",
+    "name": "DataHarvest Ltd",
+    "about": "DataHarvest Ltd provides data enrichment and analytics for SaaS companies. We append firmographic and behavioural attributes to customer records and run analytics pipelines on the enriched data for our clients.",
+    "headquarters": {"city": "Singapore", "country": "Singapore"},
+    "data_processing_locations": ["Singapore"]
+  }
+]

@@ -43,12 +43,17 @@ def para_hash(p: str) -> str:
     return sha(p.lower())
 
 
+def location(sub: Subprocessor, card: StateCard) -> str:
+    """Listed country, or the one the agent established by investigation when none is listed."""
+    return sub.country if sub.country.strip() else card.investigations.get(sub_key(sub), {}).get("country", "")
+
+
 def findings(card: StateCard, snapshot_id: str, tick: int, previous: list[Finding]) -> list[Finding]:
     """Recompute open findings from the card's current facts. Keeps opened_tick for findings still open."""
     opened = {(f.rule, f.summary): f for f in previous}
     now = []
     for s in card.subprocessors:
-        bad = unapproved(s)
+        bad = unapproved(Subprocessor(name=s.name, country=location(s, card)))
         if bad and ("R1", f"{s.name} processes data in {', '.join(bad)} (not approved)") not in now:
             now.append(("R1", f"{s.name} processes data in {', '.join(bad)} (not approved)"))
     if card.training_on_customer_data is True:

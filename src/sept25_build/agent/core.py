@@ -182,19 +182,24 @@ def _compact_notes(old_notes: str, line: str, c: dict) -> str:
     return "\n".join(kept)[:NOTES_MAX]
 
 
-def _by_name(subs: list[Subprocessor]) -> dict[str, dict]:
-    """Group rows by sub-processor name, so a vendor listing one company in several regions is one entry."""
+def _by_name(card: StateCard) -> dict[str, dict]:
+    """Group rows by sub-processor name, so a vendor listing one company in several regions is one
+    entry. Unlisted locations use what the agent established by investigation (with its evidence)."""
     out: dict[str, dict] = {}
-    for sp in subs:
-        e = out.setdefault(policy.sub_key(sp), {"name": sp.name, "purpose": sp.purpose, "locations": [], "bad": []})
-        e["locations"].append(sp.country)
-        e["bad"] += [c for c in policy.unapproved(sp) if c not in e["bad"]]
+    for sp in card.subprocessors:
+        k = policy.sub_key(sp)
+        loc = policy.location(sp, card)
+        e = out.setdefault(k, {"name": sp.name, "purpose": sp.purpose, "locations": [], "bad": [], "evidence": ""})
+        e["locations"].append(loc if sp.country.strip() or not loc else f"{loc}, found by the agent")
+        if not sp.country.strip() and loc:
+            e["evidence"] = card.investigations.get(k, {}).get("evidence_url", "")
+        e["bad"] += [c for c in policy.unapproved(Subprocessor(name=sp.name, country=loc)) if c not in e["bad"]]
     return out
 
 
 def _sub_alerts(old: StateCard, new: StateCard, snap: Snapshot, tick: int, first: bool) -> list[Alert]:
     alerts = []
-    before, after = _by_name(old.subprocessors), _by_name(new.subprocessors)
+    before, after = _by_name(old), _by_name(new)
     for k, e in after.items():
         fresh_bad = [c for c in e["bad"] if c not in before.get(k, {}).get("bad", [])]
         if not fresh_bad:
@@ -203,6 +208,9 @@ def _sub_alerts(old: StateCard, new: StateCard, snap: Snapshot, tick: int, first
         past = old.ledger.get(k, {})
         explanation = (f"{e['name']} processes data in {', '.join(fresh_bad)}, which is not on {COMPANY}'s "
                        f"approved list. {RULES['R1']}.")
+        if e["evidence"]:
+            explanation += (f" {new.display_name} lists no location for it; the agent followed its website "
+                            f"and found it: {e['evidence']}")
         if first:
             title = f"Baseline: {new.display_name} already uses {e['name']} ({where})"
         elif k in before:
@@ -255,7 +263,25 @@ def _clause_alerts(old: StateCard, new: StateCard, snap: Snapshot, tick: int, fi
     return alerts
 
 
-def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live") -> tuple[StateCard, list[Alert], TickLog]:
+def _describe_changes(old: StateCard, new: StateCard, first: bool) -> list[str]:
+    """What changed this tick, in a few lines: the only 'history' an episode ever sees."""
+    if first:
+        return [f"first observation: {len(new.subprocessors)} sub-processors"]
+    out = []
+    a, b = {policy.sub_key(s): s for s in old.subprocessors}, {policy.sub_key(s): s for s in new.subprocessors}
+    out += [f"added sub-processor {s.name} (location: {s.country or 'not listed'}; url: {s.url or 'none'})"
+            for k, s in b.items() if k not in a]
+    out += [f"removed sub-processor {s.name}" for k, s in a.items() if k not in b]
+    out += [f"new {v['kind']} sentence: \"{v['text'][:200]}\"" for k, v in new.sentence_verdicts.items()
+            if k not in old.sentence_verdicts]
+    for f in ("training_on_customer_data", "retention_days"):
+        if getattr(old, f) != getattr(new, f):
+            out.append(f"{f}: {getattr(old, f)} -> {getattr(new, f)}")
+    return out[:12]
+
+
+def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live",
+         agent: bool = False, episodes: list | None = None, store=None) -> tuple[StateCard, list[Alert], TickLog]:
     t0 = time.monotonic()
     first = card is None
     old = card or StateCard(vendor=snap.vendor, display_name=snap.display_name, is_demo_mirror=snap.is_demo_mirror)
@@ -291,11 +317,25 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
         new.clause_quotes = {k: v for k, v in {"training": t_quote, "retention": r_quote}.items() if v}
         new.policy_paragraph_hashes = hashes
 
+    facts_changed = (old.training_on_customer_data, old.retention_days) != (new.training_on_customer_data, new.retention_days)
+    material = first or subs_changed or facts_changed
+
+    # 2b. The agent: a fresh-context, tool-using episode, only when there's something to investigate.
+    ep = None
+    if agent and llm.review_available():
+        from . import episode
+        trigger = episode.needs_episode(card, new, material)
+        if trigger:
+            changes = _describe_changes(old, new, first)
+            ep = episode.run_episode(card, new, snap, tick, run_id, trigger, changes, store)
+            if episodes is not None:
+                episodes.append(ep)
+            usage["input_tokens"] += ep.input_tokens
+            usage["output_tokens"] += ep.output_tokens
+
     # 3. Compliance is decided in code, from the rewritten card.
     new.open_findings = policy.findings(new, snap.snapshot_id, tick, old.open_findings)
     new.status = "red" if new.open_findings else "green"
-    facts_changed = (old.training_on_customer_data, old.retention_days) != (new.training_on_customer_data, new.retention_days)
-    material = first or subs_changed or facts_changed
     alerts = _sub_alerts(old, new, snap, tick, first) + _clause_alerts(old, new, snap, tick, first)
     by_text = {v["text"]: v for v in new.sentence_verdicts.values()}
     for a in alerts:
@@ -303,6 +343,10 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
             quote = new.clause_quotes.get("training" if a.rule == "R2" else "retention", "")
             who = _who_judged(by_text.get(quote[:300]))
             a.explanation = f"{a.explanation} {who}".strip()
+    if ep is not None and ep.committed.get("memo"):
+        for a in alerts:
+            if a.kind == "violation":
+                a.explanation = f"{a.explanation} Agent memo: {ep.committed['memo']}"
     _update_ledger(old, new, tick)
     if material:
         new.last_material_change_tick = tick
@@ -322,7 +366,7 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
     if material or alerts:
         line = (f"t{tick}: " + ("baseline. " if first else "") +
                 ("; ".join(a.title for a in alerts) if alerts else "material change, still compliant"))
-        new.notes = _compact_notes(old.notes, line, c)
+        new.notes = _compact_notes(new.notes, line, c)  # new.notes may already hold the agent's own note
 
     log = TickLog(run_id=run_id, tick=tick, agent="nights_watch", vendor=snap.vendor,
                   input_tokens=usage["input_tokens"], output_tokens=usage["output_tokens"],

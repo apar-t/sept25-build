@@ -3,6 +3,7 @@
     uv run python -m sept25_build.agent.runner                  # tick every 30s against RawTree
     uv run python -m sept25_build.agent.runner --fetch          # also run lane A's ingest each cycle
     uv run python -m sept25_build.agent.runner --every 10 --cycles 3 --adaptive
+    uv run python -m sept25_build.agent.runner --fetch --agent       # + the tool-using agent (GPT-5.5)
     uv run python -m sept25_build.agent.runner --store file:.nw_state   # durable local store instead
 
 What makes it long-horizon-safe:
@@ -123,6 +124,7 @@ def main() -> None:
     ap.add_argument("--holder", default=f"{getpass.getuser()}@{socket.gethostname()}")
     ap.add_argument("--takeover", action="store_true")
     ap.add_argument("--no-llm", action="store_true")
+    ap.add_argument("--agent", action="store_true", help="let the tool-using agent investigate open questions")
     args = ap.parse_args()
     if args.no_llm:
         llm.disable()
@@ -148,7 +150,7 @@ def main() -> None:
                         ingest.run_once()
                     else:
                         print("runner: ingest.run_once() not available yet (lane A); agent only")
-                alerts = run_tick(store, run_id=args.run_id, adaptive=args.adaptive)
+                alerts = run_tick(store, run_id=args.run_id, adaptive=args.adaptive, agent=args.agent)
                 failures = 0
                 stamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
                 print(f"[{stamp}] cycle {cycle}: {len(alerts)} alert(s) in {time.monotonic() - t0:.1f}s")

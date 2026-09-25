@@ -28,6 +28,7 @@ TABLES = {
     "ticks": "nw_ticks",
     "memory_ops": "nw_memory_ops",   # journal of the agent's edits to its own working memory
     "lease": "nw_agent_lease",       # single-runner lock + heartbeat
+    "episodes": "nw_episodes",       # the agent's reasoning traces: tools called, findings, commit
     "commits": "nw_commits",         # one row per committed batch of state cards (crash-safe commit point)
 }
 
@@ -83,6 +84,7 @@ class Subprocessor(BaseModel):
     name: str
     purpose: str = ""
     country: str = ""  # as written on the vendor's page; the agent normalizes it
+    url: str = ""      # optional website link from the vendor's list (the agent can follow it)
 
 
 class Snapshot(BaseModel):
@@ -156,6 +158,7 @@ class StateCard(BaseModel):
     policy_paragraph_hashes: list[str] = []
     ledger: dict[str, dict] = {}     # every sub-processor ever seen: first_seen, times_added, last_removed
     sentence_verdicts: dict[str, dict] = {}  # judged policy sentences still in the terms: kind, text, allows/days, by
+    investigations: dict[str, dict] = {}  # agent findings per sub-processor key: country, evidence_url, tick, how
     depends_on: list[str] = []       # watched vendors that appear in this vendor's sub-processor list
     exposed_via: list[str] = []      # red vendors reachable through depends_on (fourth-party risk)
 
@@ -247,3 +250,31 @@ class MemoryOp(BaseModel):
 
     def to_row(self) -> dict:
         return self.model_dump(mode="json")
+
+
+class Episode(BaseModel):
+    """One bounded agent episode on one vendor: fresh context (state card + change), a few tool
+    calls, one commit. The transcript is kept here for the dashboard, never fed back to the model."""
+    run_id: str
+    tick: int
+    vendor: str
+    trigger: str
+    model: str
+    steps: list[dict] = []           # [{"tool", "args", "result"}] with results truncated
+    outcome: str = ""                # the agent's committed summary
+    committed: dict = {}             # what the commit changed
+    input_tokens: int = 0
+    output_tokens: int = 0
+    latency_ms: int = 0
+    created_at: datetime = Field(default_factory=now)
+    episode_id: str = ""
+
+    def model_post_init(self, _ctx) -> None:
+        if not self.episode_id:
+            self.episode_id = f"{self.run_id}:{self.tick}:{self.vendor}"
+
+    def to_row(self) -> dict:
+        row = self.model_dump(mode="json")
+        row["steps"] = json.dumps(self.steps)
+        row["committed"] = json.dumps(self.committed)
+        return row

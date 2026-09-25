@@ -19,6 +19,11 @@ class MemoryStore:
         self.alerts: list[Alert] = []
         self.ticks: list[TickLog] = []
         self.ops: list[MemoryOp] = []
+        self.episodes: list = []
+
+    def write_episodes(self, eps) -> None:
+        have = {e.episode_id for e in self.episodes}
+        self.episodes += [e for e in eps if e.episode_id not in have]
 
     def add_snapshots(self, snaps: list[Snapshot]) -> None:
         self.snapshots += snaps
@@ -122,6 +127,21 @@ class RawTreeStore:
             except Exception:
                 continue
         return sorted(snaps, key=lambda s: s.fetched_at)
+
+    def write_episodes(self, eps) -> None:
+        have = self._existing("episodes", "episode_id", [e.episode_id for e in eps])
+        rawtree.insert("episodes", [e.to_row() for e in eps if e.episode_id not in have])
+
+    def alerts_for(self, vendor: str) -> list[Alert]:
+        v = vendor.replace("'", "''")
+        try:
+            rows = rawtree.query(f"SELECT toString(tick) AS tick, toString(kind) AS kind, toString(rule) AS rule, "
+                                 f"toString(title) AS title FROM {TABLES['alerts']} WHERE toString(vendor) = '{v}'")
+        except RuntimeError:
+            return []
+        rows.sort(key=lambda r: int(float(r["tick"])))
+        return [Alert(vendor=vendor, display_name="", tick=int(float(r["tick"])), kind=r["kind"], rule=r["rule"],
+                      title=r["title"], before="", after="", explanation="", evidence_snapshot_id="") for r in rows]
 
     def _existing(self, table: str, key: str, ids: list[str]) -> set[str]:
         if not ids:
