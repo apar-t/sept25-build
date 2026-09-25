@@ -76,6 +76,13 @@ def build(s: str) -> str:
     rep('<a class="about" href="/about/"', '<a class="about" href="./"')
     # a company the visitor names needs the live service (it opens that company's site): not in a recording
     rep('  {id: "custom", label: "Tinybird adds a company you choose"},\n', '')
+    # the "New · Now reads real companies' sub-processor lists" pill: a replay reads nothing live
+    a = s.index('<div class="n-pill">')
+    s = s[:a].rstrip(" ") + s[s.index("</div>", a) + len("</div>\n"):]
+    # rotating industry word + caret: the page's sky blue, deep enough to read (gold was under 2:1 on the sky)
+    rep('.n-word{color:#d9a93a;', '.n-word{color:#2f6fae;')
+    rep('.n-caret{display:inline-block;width:3px;height:.8em;margin-left:4px;background:#d9a93a;',
+        '.n-caret{display:inline-block;width:3px;height:.8em;margin-left:4px;background:#2f6fae;')
     assert "Example Email Delivery" not in s and "fetch(path" in s
     return s
 
