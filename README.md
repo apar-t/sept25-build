@@ -15,7 +15,7 @@ uv sync
 `.env` is committed only in encrypted form, as `.env.age`. Only the keys listed in `.age-recipients` can decrypt it.
 
 ```bash
-# apar-t (GitHub SSH key)
+# apar-t, rohitenterprise (GitHub SSH key)
 age -d -i ~/.ssh/id_ed25519 .env.age > .env
 # vroy2008
 age -d -i ~/.config/age/keys.txt .env.age > .env
