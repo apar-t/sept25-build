@@ -1,0 +1,32 @@
+{
+  "slug": "bfl",
+  "display_name": "Black Forest Labs",
+  "subprocessors": [
+    {
+      "name": "Amazon Web Services, Inc.",
+      "purpose": "Cloud hosting",
+      "country": "United States"
+    },
+    {
+      "name": "Example GPU Cloud",
+      "purpose": "GPU compute for image generation",
+      "country": "Germany"
+    },
+    {
+      "name": "Example Content Delivery",
+      "purpose": "Image delivery",
+      "country": "Netherlands"
+    },
+    {
+      "name": "Example Payments Co.",
+      "purpose": "Billing and payments",
+      "country": "United Kingdom"
+    },
+    {
+      "name": "Example Support Desk",
+      "purpose": "Customer support ticketing",
+      "country": "Japan"
+    }
+  ],
+  "dpa_markdown": "# Black Forest Labs Data Processing Terms (demo mirror)\n\nIllustrative content for the Night's Watch hackathon demo. Not Black Forest Labs' actual terms.\n\nLast updated: 2026-06-01\n\n## Scope\n\nThese terms describe how Black Forest Labs processes customer data on behalf of its customers when providing its image generation API.\n\n## Use of customer data\n\nWe process prompts and generated images only to deliver the API to the customer. We do not use customer data to train machine learning or AI models.\n\n## Retention\n\nCustomer data is deleted within 30 days of account termination. Tax and invoice records are retained for 7 years as required by law.\n\n## Security\n\nCustomer data is encrypted in transit and at rest, and generated images are served from access-controlled storage. We train our support staff on data protection every year.\n\n## Changes to sub-processors\n\nWe notify customers at least 30 days before adding a new sub-processor. We publish every change on our sub-processors page.\n"
+}

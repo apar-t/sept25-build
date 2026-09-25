@@ -1,0 +1,27 @@
+{
+  "slug": "liquid",
+  "display_name": "Liquid AI",
+  "subprocessors": [
+    {
+      "name": "Amazon Web Services, Inc.",
+      "purpose": "Cloud hosting",
+      "country": "United States"
+    },
+    {
+      "name": "Example GPU Cloud",
+      "purpose": "GPU compute for model inference",
+      "country": "Canada"
+    },
+    {
+      "name": "Example Identity Provider",
+      "purpose": "Authentication",
+      "country": "United States"
+    },
+    {
+      "name": "Example Analytics Co.",
+      "purpose": "Product usage analytics",
+      "country": "Sweden"
+    }
+  ],
+  "dpa_markdown": "# Liquid AI Data Processing Terms (demo mirror)\n\nIllustrative content for the Night's Watch hackathon demo. Not Liquid AI's actual terms.\n\nLast updated: 2026-06-01\n\n## Scope\n\nThese terms describe how Liquid AI processes customer data on behalf of its customers when providing hosted AI model inference.\n\n## Use of customer data\n\nPrompts and outputs are processed only to return inference results to the customer. We do not use customer data to train machine learning or AI models.\n\n## Retention\n\nCustomer data is deleted within 30 days of account termination. Tax and invoice records are retained for 7 years as required by law.\n\n## Security\n\nWe encrypt customer data in transit and at rest and isolate inference workloads per customer. We train our support staff on data protection every year.\n\n## Changes to sub-processors\n\nWe notify customers at least 30 days before adding a new sub-processor. Customers may object to a new sub-processor during the notice period.\n"
+}

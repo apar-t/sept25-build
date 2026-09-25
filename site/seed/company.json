@@ -1,0 +1,131 @@
+{
+  "name": "Night's Watch Inc.",
+  "tagline": "Trust Center",
+  "disclaimer": "Night's Watch Inc. is a fictional company created for a hackathon demo. Its vendors are the event's sponsors; the vendor pages on this site are illustrative demo mirrors, not the vendors' actual terms.",
+  "intro": "Night's Watch Inc. runs a hosted monitoring platform for businesses. This Trust Center explains how we handle your data, which vendors (sub-processors) help us run the service, and the data-processing terms those vendors apply.",
+  "updated": "2026-06-01",
+  "privacy": [
+    {
+      "heading": "Who we are",
+      "body": "Night's Watch Inc. (\"Night's Watch\", \"we\") provides a hosted monitoring platform (the \"Service\"). This policy explains how we collect, use and protect personal data when you use the Service or visit our websites."
+    },
+    {
+      "heading": "Information we collect",
+      "body": "We collect account details you give us (name, work email, company), data you upload to the Service (\"customer data\"), and technical data such as IP address, browser type and usage logs."
+    },
+    {
+      "heading": "How we use information",
+      "body": "We use personal data to provide and secure the Service, to support you, to bill you, and to meet legal obligations. We do not sell personal data."
+    },
+    {
+      "heading": "AI and model training",
+      "body": "We do not use customer data to train AI or machine learning models, and we require the same commitment from every sub-processor."
+    },
+    {
+      "heading": "Sub-processors",
+      "body": "We use a small number of vendors to run the Service. They process customer data only on our instructions and under written data-processing terms. See our [sub-processor list](/subprocessors)."
+    },
+    {
+      "heading": "International transfers",
+      "body": "Customer data is processed only in countries on our approved list (the European Economic Area, the United Kingdom, Switzerland, the United States, Canada and Japan), with appropriate safeguards in place."
+    },
+    {
+      "heading": "Retention",
+      "body": "We keep customer data for as long as your account is active and delete it within 90 days after the account ends, unless the law requires us to keep it longer."
+    },
+    {
+      "heading": "Security",
+      "body": "We encrypt data in transit and at rest, restrict access on a need-to-know basis, and review our vendors' security every year."
+    },
+    {
+      "heading": "Your rights",
+      "body": "Depending on where you live, you may have the right to access, correct, delete or export your personal data, or to object to certain processing. Contact us to exercise these rights."
+    },
+    {
+      "heading": "Children",
+      "body": "The Service is for businesses and is not directed to children under 16."
+    },
+    {
+      "heading": "Changes to this policy",
+      "body": "We will post any changes on this page and, for material changes, notify account owners by email at least 30 days in advance."
+    },
+    {
+      "heading": "Contact",
+      "body": "Questions about privacy: privacy@nightswatch.example."
+    }
+  ],
+  "terms": [
+    {
+      "heading": "Acceptance",
+      "body": "By creating an account or using the Service you agree to these terms on behalf of your organization."
+    },
+    {
+      "heading": "The Service",
+      "body": "Night's Watch provides a hosted monitoring platform. We may improve or change features, and will tell you in advance about changes that materially reduce the Service."
+    },
+    {
+      "heading": "Accounts",
+      "body": "You are responsible for your users, for keeping credentials secure, and for all activity under your account."
+    },
+    {
+      "heading": "Acceptable use",
+      "body": "Do not use the Service to break the law, to infringe others' rights, to probe or attack our systems, or to resell it without our written permission."
+    },
+    {
+      "heading": "Customer data",
+      "body": "You own your customer data. We process it only to provide the Service, as described in our [privacy policy](/privacy) and data-processing terms."
+    },
+    {
+      "heading": "Fees",
+      "body": "Paid plans are billed in advance. Fees are non-refundable except where the law or these terms say otherwise."
+    },
+    {
+      "heading": "Warranties and liability",
+      "body": "The Service is provided \"as is\". To the extent the law allows, our total liability is limited to the fees you paid in the 12 months before the claim."
+    },
+    {
+      "heading": "Termination",
+      "body": "Either party may end these terms with 30 days' notice. After termination we delete customer data as described in our privacy policy."
+    },
+    {
+      "heading": "Governing law",
+      "body": "These terms are governed by the laws of the State of Delaware, United States."
+    },
+    {
+      "heading": "Contact",
+      "body": "Questions about these terms: legal@nightswatch.example."
+    }
+  ],
+  "subprocessors": [
+    {
+      "slug": "aws",
+      "name": "AWS",
+      "purpose": "Cloud hosting",
+      "location": "United States, Ireland"
+    },
+    {
+      "slug": "nimble",
+      "name": "Nimble",
+      "purpose": "Web data collection",
+      "location": "United States"
+    },
+    {
+      "slug": "tinybird",
+      "name": "Tinybird",
+      "purpose": "Real-time analytics database",
+      "location": "European Union"
+    },
+    {
+      "slug": "liquid",
+      "name": "Liquid AI",
+      "purpose": "AI model inference",
+      "location": "United States"
+    },
+    {
+      "slug": "bfl",
+      "name": "Black Forest Labs",
+      "purpose": "Image generation",
+      "location": "Germany"
+    }
+  ]
+}

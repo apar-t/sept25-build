@@ -1,0 +1,27 @@
+{
+  "slug": "tinybird",
+  "display_name": "Tinybird",
+  "subprocessors": [
+    {
+      "name": "Amazon Web Services, Inc.",
+      "purpose": "Cloud hosting",
+      "country": "United States"
+    },
+    {
+      "name": "Example Monitoring",
+      "purpose": "Application performance monitoring",
+      "country": "Germany"
+    },
+    {
+      "name": "Example Support Desk",
+      "purpose": "Customer support ticketing",
+      "country": "Ireland"
+    },
+    {
+      "name": "Example Email Delivery",
+      "purpose": "Transactional email",
+      "country": "France"
+    }
+  ],
+  "dpa_markdown": "# Tinybird Data Processing Terms (demo mirror)\n\nIllustrative content for the Night's Watch hackathon demo. Not Tinybird's actual terms.\n\nLast updated: 2026-06-01\n\n## Scope\n\nThese terms describe how Tinybird processes customer data on behalf of its customers when providing its real-time analytics database.\n\n## Use of customer data\n\nWe process customer data only to ingest, store and query it as instructed by the customer. We do not use customer data to train machine learning or AI models.\n\n## Retention\n\nCustomer data is deleted within 30 days of account termination. Tax and invoice records are retained for 7 years as required by law.\n\n## Security\n\nCustomer data is encrypted in transit and at rest in European Union regions, and production access requires multi-factor authentication. We train our support staff on data protection every year.\n\n## Changes to sub-processors\n\nWe notify customers at least 30 days before adding a new sub-processor. Customers may object to a new sub-processor by contacting privacy@tinybird.example.\n"
+}

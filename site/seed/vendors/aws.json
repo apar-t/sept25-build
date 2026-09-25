@@ -1,0 +1,27 @@
+{
+  "slug": "aws",
+  "display_name": "AWS",
+  "subprocessors": [
+    {
+      "name": "Example Email Delivery",
+      "purpose": "Transactional email",
+      "country": "United States"
+    },
+    {
+      "name": "Example Support Desk",
+      "purpose": "Customer support ticketing",
+      "country": "Ireland"
+    },
+    {
+      "name": "Example Payments Co.",
+      "purpose": "Billing and payments",
+      "country": "United States"
+    },
+    {
+      "name": "Example Security Monitoring",
+      "purpose": "Threat detection and logging",
+      "country": "Germany"
+    }
+  ],
+  "dpa_markdown": "# AWS Data Processing Terms (demo mirror)\n\nIllustrative content for the Night's Watch hackathon demo. Not AWS's actual terms.\n\nLast updated: 2026-06-01\n\n## Scope\n\nThese terms describe how AWS processes customer data on behalf of its customers when providing cloud hosting and infrastructure services.\n\n## Use of customer data\n\nWe process customer data only to provide, maintain and secure the services. We do not use customer data to train machine learning or AI models.\n\n## Retention\n\nCustomer data is deleted within 30 days of account termination. Tax and invoice records are retained for 7 years as required by law.\n\n## Security\n\nCustomer data is encrypted in transit and at rest, and access is limited to authorized personnel. We train our support staff on data protection every year.\n\n## Changes to sub-processors\n\nWe notify customers at least 30 days before adding a new sub-processor. Customers may object to a new sub-processor during the notice period.\n"
+}

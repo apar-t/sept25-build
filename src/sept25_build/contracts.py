@@ -26,6 +26,8 @@ TABLES = {
     "state_cards": "nw_state_cards",
     "alerts": "nw_alerts",
     "ticks": "nw_ticks",
+    "memory_ops": "nw_memory_ops",   # journal of the agent's edits to its own working memory
+    "lease": "nw_agent_lease",       # single-runner lock + heartbeat
 }
 
 # The company's data policy. The agent checks every vendor against these rules.
@@ -214,6 +216,33 @@ class TickLog(BaseModel):
     card_tokens: int = 0             # size of the agent's working context (state card) after this step
     latency_ms: int = 0
     created_at: datetime = Field(default_factory=now)
+    tick_id: str = ""                # idempotency key: a replayed tick writes the same id
+
+    def model_post_init(self, _ctx) -> None:
+        if not self.tick_id:
+            self.tick_id = f"{self.run_id}:{self.tick}:{self.agent}:{self.vendor}"
+
+    def to_row(self) -> dict:
+        return self.model_dump(mode="json")
+
+
+class MemoryOp(BaseModel):
+    """One edit the agent made to its own working memory (the state card). The journal of these
+    is how the agent's context editing becomes visible and auditable, tick by tick."""
+    run_id: str
+    tick: int
+    vendor: str
+    op: Literal["set", "open_finding", "close_finding", "remember", "forget", "compact", "keep_on_fetch_gap"]
+    field: str                       # e.g. training_on_customer_data, subprocessor, sentence, notes
+    before: str = ""
+    after: str = ""
+    why: str = ""
+    created_at: datetime = Field(default_factory=now)
+    op_id: str = ""                  # idempotency key: a replayed tick writes the same id
+
+    def model_post_init(self, _ctx) -> None:
+        if not self.op_id:
+            self.op_id = f"{self.vendor}:{self.tick}:{self.op}:{self.field}:{sha(self.before + '>' + self.after)[:8]}"
 
     def to_row(self) -> dict:
         return self.model_dump(mode="json")

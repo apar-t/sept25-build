@@ -1,0 +1,27 @@
+{
+  "slug": "nimble",
+  "display_name": "Nimble",
+  "subprocessors": [
+    {
+      "name": "Amazon Web Services, Inc.",
+      "purpose": "Cloud hosting",
+      "country": "United States"
+    },
+    {
+      "name": "Example Proxy Network",
+      "purpose": "Network infrastructure",
+      "country": "Netherlands"
+    },
+    {
+      "name": "Example Email Delivery",
+      "purpose": "Transactional email",
+      "country": "United States"
+    },
+    {
+      "name": "Example Payments Co.",
+      "purpose": "Billing and payments",
+      "country": "United Kingdom"
+    }
+  ],
+  "dpa_markdown": "# Nimble Data Processing Terms (demo mirror)\n\nIllustrative content for the Night's Watch hackathon demo. Not Nimble's actual terms.\n\nLast updated: 2026-06-01\n\n## Scope\n\nThese terms describe how Nimble processes customer data on behalf of its customers when providing its web data collection platform.\n\n## Use of customer data\n\nWe use customer data only to run the collection jobs our customers configure. We do not use customer data to train machine learning or AI models.\n\n## Retention\n\nCustomer data is deleted within 30 days of account termination. Tax and invoice records are retained for 7 years as required by law.\n\n## Security\n\nWe encrypt customer data in transit and at rest and review access rights every quarter. We train our support staff on data protection every year.\n\n## Changes to sub-processors\n\nWe notify customers at least 30 days before adding a new sub-processor. The current list is always available on our sub-processors page.\n"
+}
