@@ -485,6 +485,30 @@ def _rows(page: str) -> list[dict]:
             name = g(ni if ni is not None else 0)
             if name and len(name) <= 120 and name.lower() not in head:
                 rows.append({"name": name, "purpose": g(pi)[:160], "country": g(ci)[:160]})
+    return rows or _json_rows(page)
+
+
+def _json_rows(page: str) -> list[dict]:
+    """Trust portals (Wolfia, etc.) embed the list as JSON: "subprocessors":[{name, service_description, location}]."""
+    import html as _html
+    dec, text, rows = json.JSONDecoder(), _html.unescape(page), []
+    for m in re.finditer(r'"sub_?processors"\s*:\s*\[', text, re.I):
+        try:
+            arr, _ = dec.raw_decode(text, m.end() - 1)
+        except ValueError:
+            continue
+        for x in arr if isinstance(arr, list) else []:
+            if not isinstance(x, dict):
+                continue
+            co = x.get("company") if isinstance(x.get("company"), dict) else {}
+            name = x.get("display_name") or x.get("name") or co.get("name") or ""
+            where = x.get("location") or x.get("country") or x.get("countries") or x.get("region") or ""
+            where = ", ".join(where) if isinstance(where, list) else str(where)
+            if name and isinstance(name, str):
+                rows.append({"name": name[:120], "country": where[:160],
+                             "purpose": str(x.get("service_description") or x.get("purpose") or x.get("description") or "")[:160]})
+        if rows:
+            break
     return rows
 
 
@@ -507,7 +531,19 @@ def _discover(job: _Job, url: str, demo: str) -> None:
     ranked = sorted(set(_links(home, url, site)), key=lambda x: -x[0]) if home else []
     guesses = [url + p for p in ("/subprocessors", "/sub-processors", "/legal/subprocessors", "/legal/sub-processors",
                                  "/trust", "/legal", "/privacy")]
-    todo = list(dict.fromkeys([u for _, u in ranked] + guesses))[:12]
+    found = []
+    try:  # web search first: many companies keep the list on a trust subdomain that the homepage doesn't link to
+        from .. import ingest
+        res = ingest._nimble().search(query=f"{site} subprocessors list", max_results=8, search_depth="lite")
+        d = res.model_dump() if hasattr(res, "model_dump") else res
+        for x in (d.get("results") or []):
+            u, h = x.get("url") or "", (urlparse(x.get("url") or "").hostname or "").lower()
+            if h.endswith(site) and (_SUBP.search(u) or _SUBP.search(x.get("title") or "")):
+                found.append(u)
+        s["detail"] = f"Web search via Nimble: {len(found)} likely pages"
+    except Exception:
+        pass
+    todo = list(dict.fromkeys(found + [u for _, u in ranked] + guesses))[:14]
     seen, pages = set(), {}
 
     def grab(batch):
@@ -528,7 +564,7 @@ def _discover(job: _Job, url: str, demo: str) -> None:
     rows = _rows(pages[best]) if best and score(best)[0] else []
     if not rows:  # JS-rendered trust centers: render the most likely page and try again
         cands = [u for u in pages if _SUBP.search(u) or _SUBP.search(pages[u])]
-        for u in sorted(cands, key=lambda u: not _SUBP.search(u))[:2]:
+        for u in sorted(cands, key=lambda u: (u not in found, not _SUBP.search(u)))[:3]:
             s["detail"] = f"Rendering {u} via Nimble"
             pg = _fetch(u, render=True)
             if _rows(pg):
