@@ -6,8 +6,10 @@ Every store has the same contract:
       rows whose idempotency key (alert_id / tick_id / op_id) was already written are skipped
 """
 
+import uuid
+
 from .. import rawtree
-from ..contracts import TABLES, Alert, MemoryOp, Snapshot, StateCard, TickLog
+from ..contracts import TABLES, Alert, MemoryOp, Snapshot, StateCard, TickLog, now
 
 
 class MemoryStore:
@@ -34,8 +36,9 @@ class MemoryStore:
     def latest_cards(self) -> dict[str, StateCard]:
         return dict(self.cards)
 
-    def last_naive_total(self, vendor: str) -> int:
-        rows = [t for t in self.ticks if t.vendor == vendor and t.agent == "naive"]
+    def last_naive_total(self, vendor: str, before_tick: int | None = None) -> int:
+        rows = [t for t in self.ticks if t.vendor == vendor and t.agent == "naive"
+                and (before_tick is None or t.tick < before_tick)]
         return rows[-1].input_tokens if rows else 0
 
     def write(self, cards: list[StateCard], alerts: list[Alert], ticks: list[TickLog], ops=()) -> None:
@@ -87,11 +90,15 @@ class RawTreeStore:
         """Latest committed card per vendor. A corrupt row falls back to that vendor's previous good one."""
         try:
             rows = rawtree.query(f"SELECT toString(vendor) AS v, toString(tick) AS t, toString(updated_at) AS u, "
-                                 f"toString(card_json) AS card_json FROM {TABLES['state_cards']}")
+                                 f"toString(batch) AS b, toString(card_json) AS card_json FROM {TABLES['state_cards']}")
         except RuntimeError as e:
             if _missing_table(e):  # first run: table not created yet
                 return {}
             raise
+        # Drop card rows from a batch whose commit never landed (crash mid-write). Rows without a
+        # batch id predate the commit protocol and are trusted.
+        committed = self._committed_batches() or set()
+        rows = [r for r in rows if not r.get("b") or r["b"] in committed]
         by_vendor: dict[str, list] = {}
         for r in rows:
             by_vendor.setdefault(r["v"], []).append(r)
@@ -128,16 +135,25 @@ class RawTreeStore:
             raise
         return {r["id"] for r in rows}
 
-    def last_naive_total(self, vendor: str) -> int:
+    def last_naive_total(self, vendor: str, before_tick: int | None = None) -> int:
         try:
             rows = rawtree.query(f"SELECT toString(tick) AS t, toString(input_tokens) AS n FROM {TABLES['ticks']} "
                                  f"WHERE toString(vendor) = '{vendor.replace(chr(39), chr(39) * 2)}' "
                                  f"AND toString(agent) = 'naive' AND toString(run_id) = 'live'")
         except RuntimeError:
             return 0
+        rows = [r for r in rows if before_tick is None or int(float(r["t"])) < before_tick]
         if not rows:
             return 0
         return int(float(max(rows, key=lambda r: int(float(r["t"])))["n"]))
+
+    def _committed_batches(self) -> set[str] | None:
+        try:
+            return {r["b"] for r in rawtree.query(f"SELECT toString(batch) AS b FROM {TABLES['commits']}")}
+        except RuntimeError as e:
+            if _missing_table(e):
+                return None
+            raise
 
     def write(self, cards: list[StateCard], alerts: list[Alert], ticks: list[TickLog], ops=()) -> None:
         # Cards last: they are the commit point. If anything before them fails, the next run
@@ -149,4 +165,10 @@ class RawTreeStore:
         rawtree.insert("alerts", [a.to_row() for a in alerts if a.alert_id not in have])
         have = self._existing("ticks", "tick_id", [t.tick_id for t in ticks])
         rawtree.insert("ticks", [t.to_row() for t in ticks if t.tick_id not in have])
-        rawtree.insert("state_cards", [c.to_row() for c in cards])
+        # Two-phase commit, because one insert of N card rows may not be all-or-nothing:
+        # card rows carry a batch id, and a batch only counts once its commit row exists.
+        if cards:
+            batch = uuid.uuid4().hex
+            rawtree.insert("state_cards", [dict(c.to_row(), batch=batch) for c in cards])
+            rawtree.insert("commits", [{"batch": batch, "cards": len(cards),
+                                        "tick": max(c.tick for c in cards), "at": now().isoformat()}])

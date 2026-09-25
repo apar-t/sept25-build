@@ -37,7 +37,7 @@ def run_tick(store=None, run_id: str = "live", adaptive: bool = False) -> list[A
             print(f"agent: skipped {snap.vendor} this tick: {type(e).__name__}: {e}")
             continue
         naive = TickLog(run_id=run_id, tick=tick, agent="naive", vendor=snap.vendor,
-                        input_tokens=naive_tokens(store.last_naive_total(snap.vendor), snap, card is None))
+                        input_tokens=naive_tokens(store.last_naive_total(snap.vendor, before_tick=tick), snap, card is None))
         out_cards.append(new)
         out_alerts += alerts
         out_ticks += [log, naive]

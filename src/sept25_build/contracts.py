@@ -28,6 +28,7 @@ TABLES = {
     "ticks": "nw_ticks",
     "memory_ops": "nw_memory_ops",   # journal of the agent's edits to its own working memory
     "lease": "nw_agent_lease",       # single-runner lock + heartbeat
+    "commits": "nw_commits",         # one row per committed batch of state cards (crash-safe commit point)
 }
 
 # The company's data policy. The agent checks every vendor against these rules.
