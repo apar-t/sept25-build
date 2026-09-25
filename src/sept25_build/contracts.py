@@ -118,8 +118,8 @@ class Finding(BaseModel):
 class StateCard(BaseModel):
     """The agent's entire memory of one vendor. Rewritten every tick, never appended to.
 
-    Everything above `policy_paragraph_hashes` is what the model sees; the hashes are
-    bookkeeping for cheap change detection and never go into a prompt.
+    prompt_view() is the working context. `policy_paragraph_hashes` and `ledger` are compact
+    long-term memory: bookkeeping for change detection and recurrence, never put in a prompt.
     """
     vendor: str
     display_name: str
@@ -134,11 +134,14 @@ class StateCard(BaseModel):
     notes: str = ""                  # the agent's own short working notes (kept under ~600 chars)
     last_material_change_tick: int | None = None
     last_snapshot_id: str = ""
+    counters: dict[str, int] = {}    # ticks, unchanged, noise, material, llm_calls, violations, resolved
+    check_every: int = 1             # suggested ticks between checks, from how often this vendor changes
     updated_at: datetime = Field(default_factory=now)
     policy_paragraph_hashes: list[str] = []
+    ledger: dict[str, dict] = {}     # every sub-processor ever seen: first_seen, times_added, last_removed
 
     def prompt_view(self) -> dict:
-        return self.model_dump(mode="json", exclude={"policy_paragraph_hashes", "updated_at"})
+        return self.model_dump(mode="json", exclude={"policy_paragraph_hashes", "ledger", "updated_at"})
 
     def to_row(self) -> dict:
         return {
@@ -189,6 +192,7 @@ class TickLog(BaseModel):
     output_tokens: int = 0
     material: bool = False
     llm_calls: int = 0
+    card_tokens: int = 0             # size of the agent's working context (state card) after this step
     latency_ms: int = 0
     created_at: datetime = Field(default_factory=now)
 

@@ -30,7 +30,8 @@ FACTS_SCHEMA = {
     },
     "required": ["training_on_customer_data", "training_quote", "retention_quote", "is_material", "reason"],
 }
-NOTES_MAX = 600
+NOTES_MAX = 700
+NOTES_KEEP = 5
 
 
 def _ground(quote: str, changed: list[str]) -> str:
@@ -58,6 +59,8 @@ def _extract(card: StateCard, changed: list[str]) -> tuple[dict, dict, str]:
              "retention_quote": "", "reason": ""}
     t_cands, r_cands = policy.training_sentences(changed), policy.retention_sentences(changed)
     usage, source, out = {"input_tokens": 0, "output_tokens": 0}, "regex", {}
+    if not t_cands and not r_cands:
+        return facts | {"reason": "no training/retention sentence changed"}, usage, "gate"  # 0 LLM calls
     if llm.available():
         user = f"Changed paragraphs in {card.display_name}'s terms:\n\n" + "\n\n".join(f"- {p}" for p in changed)
         for _ in range(2):
@@ -93,6 +96,37 @@ def _alert(card: StateCard, snap: Snapshot, tick: int, kind: str, rule: str, tit
                  is_demo_mirror=snap.is_demo_mirror)
 
 
+def _ordinal(n: int) -> str:
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+def _update_ledger(old: StateCard, new: StateCard, tick: int) -> None:
+    """Compact long-term memory of every sub-processor ever seen. O(distinct names), not O(ticks)."""
+    before = {policy.sub_key(s) for s in old.subprocessors}
+    after = {policy.sub_key(s): s for s in new.subprocessors}
+    ledger = {k: dict(v) for k, v in old.ledger.items()}
+    for k, s in after.items():
+        if k not in before:
+            e = ledger.setdefault(k, {"name": s.name, "first_seen": tick, "times_added": 0, "last_removed": None})
+            e["times_added"] += 1
+        ledger[k]["country"] = s.country
+    for k in before - after.keys():
+        if k in ledger:
+            ledger[k]["last_removed"] = tick
+    new.ledger = ledger
+
+
+def _compact_notes(old_notes: str, line: str, c: dict) -> str:
+    """The agent edits its own working notes: keep the last NOTES_KEEP events verbatim and fold
+    everything older into one summary line built from the counters. Size stays bounded forever."""
+    recent = [line] + [n for n in old_notes.splitlines() if n and not n.startswith("earlier:")]
+    kept = recent[:NOTES_KEEP]
+    if len(recent) > NOTES_KEEP or any(n.startswith("earlier:") for n in old_notes.splitlines()):
+        kept.append(f"earlier (totals so far): {c.get('ticks', 0)} ticks watched, {c.get('noise', 0) + c.get('unchanged', 0)} "
+                    f"discarded, {c.get('violations', 0)} violations, {c.get('resolved', 0)} resolved")
+    return "\n".join(kept)[:NOTES_MAX]
+
+
 def _sub_alerts(old: StateCard, new: StateCard, snap: Snapshot, tick: int) -> list[Alert]:
     alerts = []
     before = {policy.sub_key(s): s for s in old.subprocessors}
@@ -101,12 +135,19 @@ def _sub_alerts(old: StateCard, new: StateCard, snap: Snapshot, tick: int) -> li
         bad, was_bad = policy.unapproved(s), policy.unapproved(before[k]) if k in before else []
         if bad and not was_bad:
             verb = "added" if k not in before else "moved"
-            alerts.append(_alert(new, snap, tick, "violation", "R1",
-                                 f"{new.display_name} {verb} {s.name} ({s.country})",
+            past = old.ledger.get(k, {})
+            recurring = verb == "added" and past.get("last_removed") is not None
+            title = f"{new.display_name} {verb} {s.name} ({s.country})"
+            explanation = (f"{s.name} processes data in {', '.join(bad)}, which is not on {COMPANY}'s "
+                           f"approved list. {RULES['R1']}.")
+            if recurring:
+                n = past.get("times_added", 1) + 1
+                title = f"{new.display_name} re-added {s.name} ({s.country}), {_ordinal(n)} time"
+                explanation += (f" Recurring: first seen t{past.get('first_seen')}, last removed "
+                                f"t{past['last_removed']}. Escalate: removal didn't stick.")
+            alerts.append(_alert(new, snap, tick, "violation", "R1", title,
                                  "not listed" if k not in before else f"{before[k].name}: {before[k].country}",
-                                 f"{s.name}: {s.purpose} ({s.country})",
-                                 f"{s.name} processes data in {', '.join(bad)}, which is not on {COMPANY}'s "
-                                 f"approved list. {RULES['R1']}."))
+                                 f"{s.name}: {s.purpose} ({s.country})", explanation))
     for k, s in before.items():
         if policy.unapproved(s) and (k not in after or not policy.unapproved(after[k])):
             alerts.append(_alert(new, snap, tick, "resolved", "R1",
@@ -154,10 +195,9 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
     paras = snap.policy_text and policy.paragraphs(snap.policy_text) or []
     seen = set(old.policy_paragraph_hashes)
     changed = policy.relevant(paras) if first else [p for p in paras if policy.para_hash(p) not in seen]
-    usage, source, reason = {"input_tokens": 0, "output_tokens": 0}, "none", ""
+    usage, source = {"input_tokens": 0, "output_tokens": 0}, "none"
     if changed:
         facts, usage, source = _extract(old, changed)
-        reason = facts.get("reason", "")
         if facts["training_on_customer_data"] is not None:
             new.training_on_customer_data = facts["training_on_customer_data"]
             if facts["training_quote"]:
@@ -175,20 +215,31 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
     facts_changed = (old.training_on_customer_data, old.retention_days) != (new.training_on_customer_data, new.retention_days)
     material = first or subs_changed or facts_changed
     alerts = _sub_alerts(old, new, snap, tick) + _clause_alerts(old, new, snap, tick)
+    _update_ledger(old, new, tick)
     if material:
         new.last_material_change_tick = tick
 
-    # 4. The agent's own working notes: newest first, oldest lines fall off at NOTES_MAX.
-    if material or changed:
+    # 4. Counters replace history: what happened is remembered as numbers, not transcripts.
+    c = dict(old.counters)
+    kind = "material" if material else "noise" if changed else "unchanged"
+    for key, inc in [("ticks", 1), (kind, 1), ("llm_calls", int(source == "liquid")),
+                     ("violations", sum(a.kind == "violation" for a in alerts)),
+                     ("resolved", sum(a.kind == "resolved" for a in alerts))]:
+        c[key] = c.get(key, 0) + inc
+    new.counters = c
+    quiet = tick - (new.last_material_change_tick or tick)
+    new.check_every = 1 if snap.is_demo_mirror or new.open_findings or quiet < 7 else 3 if quiet < 30 else 7
+
+    # 5. Working notes: only events worth remembering get a line; noise just bumps a counter.
+    if material or alerts:
         line = (f"t{tick}: " + ("baseline. " if first else "") +
-                ("; ".join(a.title for a in alerts) if alerts
-                 else "material change, still compliant" if material else f"noise discarded ({reason or 'no change'})"))
-        notes = (line + "\n" + old.notes).strip()
-        new.notes = notes if len(notes) <= NOTES_MAX else notes[:NOTES_MAX].rsplit("\n", 1)[0]
+                ("; ".join(a.title for a in alerts) if alerts else "material change, still compliant"))
+        new.notes = _compact_notes(old.notes, line, c)
 
     log = TickLog(run_id=run_id, tick=tick, agent="nights_watch", vendor=snap.vendor,
                   input_tokens=usage["input_tokens"], output_tokens=usage["output_tokens"],
                   material=material, llm_calls=int(source == "liquid"),
+                  card_tokens=llm.count_tokens(json.dumps(new.prompt_view())),
                   latency_ms=int((time.monotonic() - t0) * 1000))
     return new, alerts, log
 
