@@ -2,7 +2,7 @@
 
 Two tiers:
   - Liquid LFM2.5 judges every new policy sentence (cheap, small, a hackathon sponsor)
-  - a stronger reviewer model (default openai/gpt-5.5 via OpenRouter) gives a second opinion only
+  - a stronger reviewer model (default openai/gpt-5.6-sol via OpenRouter) gives a second opinion only
     on the rare sentences that would change a verdict, or where Liquid and the regex disagree
 
     LLM_BACKEND=openrouter  (default when OPENROUTER_API_KEY is set)
@@ -42,7 +42,7 @@ def disable() -> None:
     _disabled = True
 
 
-REVIEW_MODEL = os.environ.get("REVIEW_MODEL", "openai/gpt-5.5")
+REVIEW_MODEL = os.environ.get("REVIEW_MODEL", "openai/gpt-5.6-sol")
 _or_key = os.environ.get("OPENROUTER_API_KEY", "")
 _reviewer = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=_or_key or "missing", timeout=30, max_retries=0)
 _review_down = False

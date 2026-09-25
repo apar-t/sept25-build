@@ -3,7 +3,7 @@
     uv run python -m sept25_build.agent.runner                  # tick every 30s against RawTree
     uv run python -m sept25_build.agent.runner --fetch          # also run lane A's ingest each cycle
     uv run python -m sept25_build.agent.runner --every 10 --cycles 3 --adaptive
-    uv run python -m sept25_build.agent.runner --fetch --agent       # + the tool-using agent (GPT-5.5)
+    uv run python -m sept25_build.agent.runner --fetch --agent       # + the tool-using agent (GPT-5.6 Sol)
     uv run python -m sept25_build.agent.runner --store file:.nw_state   # durable local store instead
 
 What makes it long-horizon-safe:
