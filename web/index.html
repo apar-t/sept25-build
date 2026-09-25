@@ -59,6 +59,8 @@ nav .wrap{display:flex;justify-content:space-between;align-items:center;height:6
 .hero h1 span{display:block;transition:opacity .6s,filter .6s}
 .hero h1 span.out{opacity:0;filter:blur(10px)}
 .sub{font-size:20px;color:var(--ink-2);max-width:580px;margin:0}
+.cta{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:30px}
+.cta small{color:var(--ink-2);font-size:14px}
 .radar-box{position:relative;width:460px;max-width:100%;justify-self:end}
 #radar{display:block;width:100%;aspect-ratio:1}
 .readout{position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;width:330px;max-width:calc(100% - 16px);padding:11px 18px 11px 14px;border-radius:14px;font-size:13.5px;line-height:1.35;transition:border-color .4s,background .4s,box-shadow .4s}
@@ -204,6 +206,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
   <div class="nav-r">
     <a class="hide" href="#problem">Problem</a>
     <a class="hide" href="#how">How it works</a>
+    <a href="demo.html">Demo</a>
     <a class="btn" href="#contact">Get in touch</a>
   </div>
 </div></nav>
@@ -215,6 +218,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
       <div class="watch"><i></i>On watch, every hour</div>
       <h1><span id="q">Who is handling your company's data this month?</span></h1>
       <p class="sub">Hourly checks on every vendor's sub-processor list and privacy policy. An alert the moment one breaks your data policy.</p>
+      <div class="cta"><a class="btn" href="demo.html">Try the demo</a><small>A replay of a real run. Four clicks, one minute.</small></div>
     </div>
     <div class="radar-box">
       <span class="radar-cap" aria-hidden="true">FICTIONAL VENDORS</span>

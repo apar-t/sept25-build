@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night's Watch · Demo</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%239fd8ff%27 d=%27M5 4h3v3h2V4h4v3h2V4h3v6H5zM7 11h10v11H7z%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Public demo, lane C: web/console.html replaying a recorded run instead of calling the stage console's API.
+   demo.json holds /api/state as it looked after each check; regenerate it with
+     NW_TABLE_SUFFIX=_e2e uv run python web/export_demo.py
+   Static: publish demo.html and demo.json next to index.html (see web/README.md). */
+:root{
+  --bg:#050913; --ink:#eef3fb; --ink-2:#9ba9c0; --ink-3:#5d6a82; --line:rgba(159,216,255,.1); --line-2:rgba(159,216,255,.18);
+  --ice:#9fd8ff; --red:#ff6767; --red-bg:rgba(255,103,103,.1); --green:#6ee7b7; --green-bg:rgba(110,231,183,.08); --amber:#ffc46b;
+  --glass:rgba(14,22,40,.6);
+  --sans:Geist,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:radial-gradient(ellipse 70% 45% at 50% 115%,rgba(95,180,255,.13),transparent 70%),linear-gradient(180deg,#03060e,var(--bg) 50%);color:var(--ink);font:15px/1.45 var(--sans);-webkit-font-smoothing:antialiased;
+  display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden}
+#sky{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+body>*:not(#sky):not(.modal){position:relative;z-index:1}
+a{color:inherit}
+button{font:inherit;color:inherit}
+.glass{background:var(--glass);border:1px solid var(--line-2);border-radius:18px;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 30px 80px -30px rgba(0,0,0,.8)}
+.eyebrow{display:flex;align-items:center;gap:10px;font:500 11.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ice);margin:0 0 14px}
+.eyebrow:before{content:"";width:18px;height:1px;background:currentColor;opacity:.8}
+.eyebrow .r{margin-left:auto;letter-spacing:.04em;text-transform:none;color:var(--ink-3)}
+.empty{color:var(--ink-3)}
+@keyframes pulse{50%{opacity:.3}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes flash{0%{box-shadow:0 0 0 0 rgba(255,103,103,.7)}100%{box-shadow:0 0 0 18px rgba(255,103,103,0)}}
+@keyframes flashok{0%{box-shadow:0 0 0 0 rgba(110,231,183,.6)}100%{box-shadow:0 0 0 18px rgba(110,231,183,0)}}
+
+/* header */
+header{display:flex;align-items:center;gap:18px;height:62px;padding:0 22px;border-bottom:1px solid var(--line)}
+.wordmark{font:600 17px/1 var(--sans);letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+.wordmark svg{width:19px;height:19px;color:var(--ice)}
+.tag{font:500 11.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);border:1px solid var(--line-2);border-radius:999px;padding:6px 11px}
+.hr{margin-left:auto;display:flex;align-items:center;gap:10px;font:12.5px var(--mono);color:var(--ink-3)}
+.hr i{width:7px;height:7px;border-radius:50%;background:var(--ice);box-shadow:0 0 10px var(--ice);animation:pulse 2.4s infinite}
+.hr b{font-weight:500;color:var(--amber)}
+a.wordmark{color:inherit;text-decoration:none}
+.intro{margin:0 0 12px;color:var(--ink-2);font-size:13.5px;line-height:1.5}
+.hr.off i{background:var(--red);box-shadow:0 0 10px var(--red)}
+
+main{display:grid;grid-template-columns:330px minmax(0,1.05fr) minmax(0,1fr);gap:14px;padding:14px 20px;min-height:0}
+.panel{padding:18px 18px 16px;min-height:0;display:flex;flex-direction:column}
+.scroll{overflow:auto;min-height:0;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+
+/* 1: run the demo */
+.steps{display:flex;flex-direction:column;gap:8px}
+.st{display:grid;grid-template-columns:30px 1fr;gap:4px 12px;text-align:left;width:100%;padding:11px 13px;border-radius:14px;border:1px solid var(--line-2);background:rgba(3,6,14,.45);cursor:pointer;transition:border-color .2s,background .2s,transform .15s}
+.st:hover:not(:disabled){border-color:rgba(159,216,255,.5);background:rgba(159,216,255,.06);transform:translateY(-1px)}
+.st:disabled{cursor:default}
+.st .n{grid-row:1/3;width:30px;height:30px;border-radius:50%;border:1px solid var(--line-2);display:grid;place-items:center;font:500 13px var(--mono);color:var(--ice)}
+.st b{font:600 16px/1.25 var(--sans);letter-spacing:-.01em}
+.st p{margin:0;color:var(--ink-2);font-size:13.5px;line-height:1.4}
+.st p i{font-style:normal;color:var(--ink-3)}
+.st .res{grid-column:2;display:none;margin-top:6px;font:12.5px/1.45 var(--mono);color:var(--ink-2)}
+.st.running{border-color:var(--ice);background:rgba(159,216,255,.07)}
+.st.running .n{border-color:transparent;border-top-color:var(--ice);border-right-color:var(--ice);animation:spin .9s linear infinite;color:transparent}
+.st.running .res,.st.done .res,.st.fail .res{display:block}
+.st.done .n{background:var(--ice);color:#04101f;border-color:var(--ice)}
+.st.fail{border-color:var(--red)}.st.fail .n{border-color:var(--red);color:var(--red)}
+.res .bad{color:var(--red)}.res .ok{color:var(--green)}
+.row{display:flex;gap:10px;align-items:center;margin-top:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--ice);color:#04101f;font:600 14.5px/1 var(--sans);padding:12px 18px;border-radius:999px;border:0;cursor:pointer;white-space:nowrap;transition:transform .15s,box-shadow .2s,opacity .2s}
+.btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 0 30px rgba(159,216,255,.45)}
+.btn:disabled,.st:disabled{opacity:.45}
+.st.running:disabled{opacity:1}
+.link{background:none;border:0;padding:6px 4px;color:var(--ink-2);font-size:13.5px;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:3px}
+.link:hover{color:var(--ink)}
+.link:disabled{opacity:.4;cursor:default}
+.hrules{display:flex;gap:18px;margin-left:18px;font-size:13px;color:var(--ink-2);white-space:nowrap}
+.hrules span:first-child{font:500 11px/1.6 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.hrules b{font:500 12px var(--mono);color:var(--ice);margin-right:2px}
+
+/* 2: your vendors */
+.radar-box{position:relative;flex:1;min-height:230px}
+#radar{position:absolute;inset:0;width:100%;height:100%}
+.radar-cap{position:absolute;right:0;top:-2px;font:11px var(--mono);color:var(--ink-3);letter-spacing:.06em}
+.readout{position:absolute;left:50%;bottom:4px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;width:360px;max-width:calc(100% - 16px);padding:11px 18px 11px 14px;border-radius:14px;font-size:14px;line-height:1.35;transition:border-color .4s,background .4s,box-shadow .4s}
+.readout i{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);flex:0 0 9px}
+.readout b{display:block;font-weight:500}
+.readout span{display:block;color:var(--ink-2);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.readout .ro{min-width:0}
+.readout.bad{border-color:rgba(255,103,103,.55);background:rgba(40,12,16,.8);box-shadow:0 0 50px -10px rgba(255,103,103,.45)}
+.readout.bad i{background:var(--red);box-shadow:0 0 12px var(--red);animation:pulse 1s infinite}
+.vlist{margin-top:10px;border-top:1px solid var(--line);flex:0 1 auto;max-height:45%}
+.v{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:4px 12px;align-items:baseline;padding:7px 2px;border-bottom:1px solid var(--line)}
+.v .d{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 8px rgba(110,231,183,.6);align-self:center}
+.v b{font-weight:500}
+.v .s{font:12.5px var(--mono);color:var(--ink-3);text-align:right}
+.v .f{grid-column:2/4;font-size:13.5px;color:var(--ink-2)}
+.v.red .d{background:var(--red);box-shadow:0 0 10px var(--red);animation:pulse 1.2s infinite}
+.v.red .s,.v.red .f em{color:var(--red)}
+.v.amber .d{background:var(--amber);box-shadow:0 0 8px var(--amber)}.v.amber .s{color:var(--amber)}
+.v em{font-style:normal}
+.agent{font:500 10.5px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:#04101f;background:var(--ice);border-radius:999px;padding:3px 7px;margin-left:6px;vertical-align:1px}
+.v.flash{animation:flash 1s 3}.v.flashok{animation:flashok 1s 2}
+
+/* 3: what just happened */
+.alert{border:1px solid rgba(255,103,103,.55);background:linear-gradient(180deg,rgba(60,14,20,.75),rgba(30,10,16,.75));border-radius:16px;padding:18px 18px 16px;box-shadow:0 0 60px -18px rgba(255,103,103,.5)}
+.alert.ok{border-color:rgba(110,231,183,.4);background:linear-gradient(180deg,rgba(12,40,32,.6),rgba(8,24,22,.6));box-shadow:0 0 60px -22px rgba(110,231,183,.4)}
+.alert.calm{border-color:var(--line-2);background:rgba(3,6,14,.45);box-shadow:none}
+.alert.new{animation:flash 1.1s 3}.alert.ok.new{animation:flashok 1.1s 2}
+.alert .tt{display:flex;gap:11px;align-items:flex-start;font:600 18px/1.3 var(--sans);letter-spacing:-.015em;margin-bottom:12px}
+.alert .tt i{width:9px;height:9px;border-radius:50%;background:var(--red);box-shadow:0 0 12px var(--red);animation:pulse 1.2s infinite;flex:0 0 9px;margin-top:7px}
+.alert.ok .tt i{background:var(--green);box-shadow:0 0 12px var(--green);animation:none}
+.alert.calm .tt i{background:var(--ice);box-shadow:0 0 10px var(--ice);animation:none}
+.alert dl{display:grid;grid-template-columns:74px 1fr;gap:8px 12px;margin:0;font-size:14px;color:var(--ink-2)}
+.alert dt{font:500 10.5px/1.9 var(--mono);color:var(--ink-3);text-transform:uppercase;letter-spacing:.08em}
+.alert dd{margin:0}
+.alert dd b{color:var(--ink);font-weight:500}
+.alert dd a{color:var(--ice);text-decoration:none;font-family:var(--mono);font-size:12.5px}
+.alert dd a:hover{text-decoration:underline}
+.alert .when{font:12px var(--mono);color:var(--ink-3);margin-top:10px}
+.earlier div{display:grid;grid-template-columns:9px minmax(0,1fr) auto;gap:10px;align-items:center;font-size:13.5px;color:var(--ink-2);padding:6px 2px;border-bottom:1px solid var(--line)}
+.earlier i{width:7px;height:7px;border-radius:50%;background:var(--red)}
+.earlier .ok i{background:var(--green)}
+.earlier span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.earlier small{font:12px var(--mono);color:var(--ink-3)}
+h3{font:500 11.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ice);margin:18px 0 10px;display:flex;gap:10px;align-items:center}
+h3 .r{margin-left:auto;letter-spacing:.04em;text-transform:none;color:var(--ink-3)}
+.did{margin:0;padding:0;list-style:none;counter-reset:s}
+.did li{position:relative;padding:6px 0 6px 28px;font-size:14px;color:var(--ink);border-left:1px solid var(--line-2);margin-left:8px}
+.did li:before{content:"";position:absolute;left:-5px;top:12px;width:9px;height:9px;border-radius:50%;background:var(--bg);border:1px solid var(--ice)}
+.did li.mem:before{border-color:var(--ink-3)}
+.did li.hit:before{background:var(--red);border-color:var(--red)}
+.did li.fix:before{background:var(--green);border-color:var(--green)}
+.did small{display:block;color:var(--ink-3);font-size:12.5px;margin-top:1px}
+.did q{color:var(--ink-2)}
+.why{font-size:13.5px;color:var(--ink-2);margin:0 0 8px}
+.why b{color:var(--ink);font-weight:500}
+
+/* bottom: memory stays small */
+.strip{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;padding:0 20px 16px}
+.strip .panel{padding:14px 18px 10px}
+.strip .eyebrow{margin-bottom:6px}
+#chart{height:124px}
+.leg{display:flex;gap:16px;font-size:12.5px;color:var(--ink-2)}
+.leg i{display:inline-block;width:14px;height:2px;background:var(--ice);vertical-align:3px;margin-right:6px}
+.leg .nv i{background:none;border-top:2px dashed var(--red);height:0}
+.nums{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-content:start}
+.num .v{white-space:nowrap;font:600 32px/1.05 var(--sans);letter-spacing:-.03em;color:var(--ice)}
+.num .l{font-size:12.5px;color:var(--ink-2);margin-top:6px;line-height:1.35}
+
+/* log modal */
+.modal{position:fixed;inset:0;z-index:50;display:none;place-items:center;background:rgba(3,6,14,.7);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);padding:30px}
+.modal.on{display:grid}
+.modal .glass{width:min(980px,100%);max-height:84vh;display:flex;flex-direction:column;overflow:hidden}
+.modal .hd{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);font:12.5px var(--mono);color:var(--ink-2)}
+.modal .hd button{margin-left:auto}
+#log{margin:0;padding:16px 18px;overflow:auto;font:12.5px/1.5 var(--mono);color:#cdd8ea;white-space:pre-wrap}
+#log .bad{color:var(--red)}#log .ok{color:var(--green)}
+
+@media (max-width:1380px){.hrules{gap:12px;font-size:12px}.hrules span:first-child{display:none}}
+@media (max-width:1180px),(max-height:700px){
+  body{display:block;overflow:auto;height:auto}
+  main{grid-template-columns:1fr 1fr}
+  main>.panel:first-child{grid-column:1/-1}
+  .radar-box{height:340px;flex:none}
+  .strip{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  header{height:auto;flex-wrap:wrap;padding:12px 16px;gap:10px}
+  .hr{margin-left:0;width:100%}
+  .hrules{display:none}
+  main{grid-template-columns:1fr;padding:12px 16px}
+  .strip{padding:0 16px 16px}
+  .nums{grid-template-columns:1fr 1fr}
+  .readout{width:calc(100% - 16px)}
+  .alert dl{grid-template-columns:1fr;gap:2px}
+  .alert dd{margin-bottom:8px}
+}
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<header>
+  <a class="wordmark" href="./"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 4h3v3h2V4h4v3h2V4h3v6H5zM7 11h10v11H7z"/></svg>Night's Watch</a>
+  <span class="tag">Recorded demo</span>
+  <span class="hrules" id="rules"></span>
+  <span class="hr" id="hr"><i></i><span id="at">loading…</span><span>·</span><span>replay of a real run</span></span>
+</header>
+
+<main>
+  <section class="panel glass">
+    <div class="eyebrow">Run the demo</div>
+    <p class="intro">A replay of one real run on our demo mirror of Tinybird's pages. Every alert, lookup and memory edit below came from the agent. Click the steps in order.</p>
+    <div class="scroll">
+      <div class="steps" id="steps"></div>
+    </div>
+    <div class="row">
+      <button class="btn" id="check" type="button">Start over</button>
+    </div>
+  </section>
+
+  <section class="panel glass">
+    <div class="eyebrow">Your vendors <span class="r">and who they share your data with</span></div>
+    <div class="radar-box">
+      <span class="radar-cap" aria-hidden="true">DEMO MIRRORS</span>
+      <canvas id="radar" role="img" aria-label="Radar of your vendors and their sub-processors. A vendor that breaks a rule turns red."></canvas>
+      <div class="readout glass" id="readout" aria-live="polite"><i></i><div class="ro"><b id="ro-t">Loading vendors…</b><span id="ro-s">&nbsp;</span></div></div>
+    </div>
+    <div class="vlist scroll" id="vlist"></div>
+  </section>
+
+  <section class="panel glass">
+    <div class="eyebrow">What just happened</div>
+    <div class="scroll" id="happened"><div class="empty">Loading…</div></div>
+  </section>
+</main>
+
+<div class="strip">
+  <section class="panel glass">
+    <div class="eyebrow">Memory stays small <span class="r">tokens the agent reads per check</span></div>
+    <div class="leg"><span><i></i>Night's Watch: state cards only</span><span class="nv"><i></i>Re-reading the full history (computed, not run)</span></div>
+    <div id="chart"></div>
+  </section>
+  <section class="panel glass">
+    <div class="eyebrow">365-day simulation <span class="r">offline simulation</span></div>
+    <div class="nums" id="nums"></div>
+  </section>
+</div>
+
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cut=(s,n)=>{s=typeof s==='string'?s:JSON.stringify(s);s=(s||'').replace(/\s+/g,' ').trim();return s.length>n?s.slice(0,n-1)+'…':s};
+const fmt=n=>Number(n||0).toLocaleString('en-US');
+const short=n=>String(n||'').replace(/\s*\(demo mirror\)\s*/i,'');
+const vname=slug=>{const v=(S.vendors||[]).find(x=>x.vendor===slug);return v?short(v.display_name):String(slug||'').replace('-mirror','')};
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function seed(i){const x=Math.sin(i*127.1)*43758.5;return x-Math.floor(x)}
+function hash(s){let h=7;for(const c of String(s))h=(h*31+c.charCodeAt(0))%100003;return h}
+
+const RULES={R1:'Data stays in approved countries',R2:'No AI training on our customer data',R3:'Data kept 90 days or less'};
+// Each step edits Tinybird's demo mirror, then runs one check. Fixed actions only; the server maps them to commands.
+const STEPS=[
+  {a:'touch',n:'Harmless edit',d:'Tinybird changes the "Last updated" date on its page.',x:'Expect: no alert and no model call.'},
+  {a:'dataharvest',n:'New sub-processor',d:'Tinybird adds DataHarvest Ltd and lists no country.',x:'Expect: the agent looks it up and flags R1.'},
+  {a:'training',n:'Policy change',d:"Tinybird's terms now allow AI training on customer data.",x:'Expect: R2, confirmed by a second model.'},
+  {a:'reset',n:'Vendor backs out',d:"Tinybird's pages go back to the original.",x:'Expect: both findings resolved.'},
+];
+let S={},first=true,running=false,logText='';
+const seen=new Set(),prevStatus={},last={};
+const changed=(k,v)=>{const s=JSON.stringify(v);if(last[k]===s)return false;last[k]=s;return true};
+const vclass=v=>v.status==='red'?'red':((v.exposed_via||[]).length?'amber':'ok');
+
+$('rules').innerHTML='<span>Your rules</span>'+Object.entries(RULES).map(([k,t])=>`<span><b>${k}</b> ${esc(t)}</span>`).join('');
+$('steps').innerHTML=STEPS.map((s,i)=>`<button class="st" type="button" data-i="${i}"><span class="n">${i+1}</span><b>${esc(s.n)}</b><p>${esc(s.d)} <i>${esc(s.x)}</i></p><span class="res"></span></button>`).join('');
+
+/* ---------- your vendors ---------- */
+function vendors(vs){
+  radar.set(vs);
+  const red=vs.filter(v=>v.status==='red'), latest=Math.max(0,...vs.map(v=>v.tick||0));
+  $('readout').classList.toggle('bad',red.length>0);
+  if(!vs.length){$('ro-t').textContent='No vendors yet';$('ro-s').textContent='Press "Check now" to take a first look.'}
+  else if(!red.length){$('ro-t').textContent=`All ${vs.length} vendors within policy`;$('ro-s').textContent=`Last check #${latest} · ${S.at||''}`}
+  else if(red.length===1){const v=red[0],f=v.open_findings||[];$('ro-t').textContent=`${short(v.display_name)} breaks ${f.map(x=>x.rule).join(' and ')||'a rule'}`;$('ro-s').textContent=f[0]?f[0].summary:''}
+  else{$('ro-t').textContent=`${red.length} vendors break your rules`;$('ro-s').textContent=red.map(v=>short(v.display_name)).join(', ')}
+  const rank={red:0,amber:1,ok:2};
+  $('vlist').innerHTML=[...vs].sort((a,b)=>rank[vclass(a)]-rank[vclass(b)]||a.vendor.localeCompare(b.vendor)).map(v=>{
+    const c=vclass(v),subs=v.subprocessors||[],flag=subs.filter(s=>s.approved===false||!s.country||s.found_by_agent);
+    const was=prevStatus[v.vendor];prevStatus[v.vendor]=c;
+    const fl=(!first&&was&&was!==c)?(c==='ok'?' flashok':' flash'):'';
+    const right=c==='red'?(v.open_findings||[]).map(f=>f.rule).join(' · ')||'red':c==='amber'?'exposed':`${subs.length} sub-processors, all approved`;
+    let h=`<div class="v ${c}${fl}"><i class="d"></i><b>${esc(v.display_name)}</b><span class="s">${esc(right)}</span>`;
+    for(const s of flag)h+=`<div class="f"><em>${s.approved===false?'✕':'?'}</em> ${esc(s.name)} · <em>${esc(s.country||'country not listed')}</em>${s.found_by_agent?'<span class="agent">found by agent</span>':''}</div>`;
+    if(c==='amber')h+=`<div class="f">Exposed through ${esc((v.exposed_via||[]).map(vname).join(', '))}</div>`;
+    return h+'</div>';
+  }).join('')||'<div class="empty" style="padding:10px 2px">No state cards yet.</div>';
+}
+
+/* ---------- what just happened ---------- */
+const plainOp=o=>{
+  const f=String(o.field||'').replace(/_/g,' '),yn=x=>x==='True'?'yes':x==='False'?'no':x;
+  switch(o.op){
+    case 'set':return o.field==='status'?`Status: ${o.before} → ${o.after}`:`${f[0].toUpperCase()+f.slice(1)}: ${yn(o.before)||'–'} → ${yn(o.after)}`;
+    case 'open_finding':return `Opened finding ${o.field}: ${cut(o.after,90)}`;
+    case 'close_finding':return `Closed finding ${o.field}`;
+    case 'compact':return `Compacted its notes (${o.before} → ${o.after})`;
+    case 'keep_on_fetch_gap':return 'Fetch came back empty, so it kept its old memory';
+    case 'remember':return o.field==='sentence'?`Remembered: <q>${esc(cut(o.after,110))}</q>`:o.field==='subprocessor'?`Added to its ledger: ${o.after}`:`First look: ${o.after}`;
+    case 'forget':return o.field==='sentence'?`Forgot: <q>${esc(cut(o.before,110))}</q>`:`Dropped ${String(o.before).replace(/\s*\(\)$/,'')}`+(o.why?` (${o.why.replace(/^no longer listed;\s*/,'')})`:'');
+    default:return `${o.op} ${o.field}`;
+  }
+};
+const opRaw=o=>/^(remember|forget)$/.test(o.op)&&o.field==='sentence';  // plainOp already escaped these
+const opCls=o=>o.op==='open_finding'||(o.op==='set'&&o.after==='red')?'hit':o.op==='close_finding'||(o.op==='set'&&o.after==='green')?'fix':'mem';
+function plainStep(s){
+  const a=s.args||{};let r={};try{r=typeof s.result==='string'?JSON.parse(s.result):(s.result||{})}catch(e){}
+  switch(s.tool){
+    case 'fetch_page':{let p=a.url||'';try{p=new URL(a.url).pathname}catch(e){}return [`Opened <b>${esc(p)}</b> through Nimble`,'to find where this company processes data']}
+    case 'search_web':return [`Searched the web through Nimble for <q>${esc(cut(a.query,80))}</q>`,''];
+    case 'judge_sentences':{const n=(a.sentences||[]).length;return [`Asked Liquid to judge ${n} changed sentence${n===1?'':'s'}`,(a.sentences||[])[0]?`“${esc(cut(a.sentences[0],120))}”`:'']}
+    case 'check_fourth_parties':{const red=r.red_upstream||[];return [`Checked the vendors it depends on (${esc((r.depends_on||[]).map(vname).join(', ')||'none')})`,red.length?`Red upstream: ${esc(red.map(vname).join(', '))}`:'None of them are red']}
+    case 'recall':return [`Looked up its long-term memory: ${esc(String(a.topic||'').replace(/_/g,' '))}`,''];
+    default:return [esc(s.tool||'step'),''];
+  }
+}
+function happened(){
+  const al=S.alerts||[],eps=S.episodes||[],ops=S.memory_ops||[],vs=S.vendors||[];
+  if(!changed('h',[al,eps,ops,vs.map(v=>v.tick)]))return;
+  let h='',earlier='';
+  const a=al[0];
+  if(!a)h+=`<div class="alert calm"><div class="tt"><i></i>No alerts yet</div><dl><dt>Watching</dt><dd>${vs.length} vendors and their sub-processors. Click step 1 to make a change.</dd></dl></div>`;
+  else{
+    const ok=a.kind==='resolved',key=a.tick+a.rule+a.kind+a.title,isNew=!first&&!seen.has(key);
+    let why=String(a.explanation||'').split(/\s*Agent memo:/)[0].replace(/:?\s*https?:\/\/\S+/g,'').trim();if(why&&!/[.!?]$/.test(why))why+='.';
+    let proof='';try{proof=`${esc(new URL(a.evidence_url).pathname)} <span class="empty">(demo mirror, recorded)</span>`}catch(e){}
+    h+=`<div class="alert ${ok?'ok':''} ${isNew?'new':''}"><div class="tt"><i></i>${esc(a.title)}</div><dl>
+      <dt>Rule</dt><dd><b>${esc(a.rule)}</b> · ${esc(RULES[a.rule]||'')}</dd>
+      <dt>${ok?'Status':'Why'}</dt><dd>${esc(cut(why,300))}</dd>
+      ${proof?`<dt>Proof</dt><dd>${proof}</dd>`:''}
+      </dl><div class="when">Check #${a.tick} · ${ok?'resolved':'violation'}</div></div>`;
+    earlier=al.length>1?'<h3>Earlier alerts</h3><div class="earlier">'+al.slice(1,4).map(x=>`<div class="${x.kind==='resolved'?'ok':''}"><i></i><span>${esc(x.rule)} · ${esc(x.title)}</span><small>#${x.tick}</small></div>`).join('')+'</div>':'';
+  }
+  al.forEach(x=>seen.add(x.tick+x.rule+x.kind+x.title));
+  // The agent's most recent check: its episode (if one ran) and the memory edits it made.
+  const latest=Math.max(0,...vs.map(v=>v.tick||0));
+  const t=Math.max(0,...eps.map(e=>e.tick),...ops.map(o=>o.tick));
+  h+=`<h3>What the agent did <span class="r">${t?'check #'+t:''}</span></h3>`;
+  if(latest>t&&t)h+=`<p class="why">Newest check (#${latest}): nothing to act on. No alert, no investigation, no memory edits. Below is the last check that did something.</p>`;
+  if(!t)h+='<p class="empty">Nothing yet.</p>';
+  else{
+    const e=eps.find(x=>x.tick===t),mine=ops.filter(o=>o.tick===t&&(!e||o.vendor===e.vendor));
+    if(e)h+=`<p class="why">${esc(vname(e.vendor))}: <b>${esc(e.trigger)}</b>, so it opened a fresh investigation <span class="empty">(${esc(e.model)}, ${(e.latency_ms/1000).toFixed(1)} s)</span>.</p>`;
+    h+='<ul class="did">';
+    if(e){
+      for(const s of e.steps||[]){const [t1,t2]=plainStep(s);h+=`<li>${t1}${t2?`<small>${t2}</small>`:''}</li>`}
+      const c=e.committed||{};
+      for(const l of c.locations||[])h+=`<li class="hit">Concluded: <b>${esc(l)}</b><small>from a page it read, with that page as evidence</small></li>`;
+      for(const r of c.rejected||[])h+=`<li class="mem">Did not accept: ${esc(r.subprocessor)} in ${esc(r.country)}<small>${esc(r.reason||'')}</small></li>`;
+    }
+    for(const o of mine.slice(0,8))h+=`<li class="${opCls(o)}">${opRaw(o)?plainOp(o):esc(plainOp(o))}</li>`;
+    if(mine.length>8)h+=`<li class="mem">…and ${mine.length-8} more memory edits</li>`;
+    h+='</ul>';
+    if(e&&e.outcome)h+=`<p class="why" style="margin-top:10px">${esc(cut(e.outcome,280))}</p>`;
+  }
+  $('happened').innerHTML=h+earlier;
+}
+
+/* ---------- memory chart + numbers ---------- */
+function chart(s,force){
+  if(!changed('s',s)&&!force)return;
+  const el=$('chart'),t=s.ticks||[],W=Math.max(300,el.clientWidth),H=el.clientHeight||124,L=46,Rr=16,T=24,B=22;
+  if(!t.length){el.innerHTML='<div class="empty">No checks yet.</div>';return}
+  const mx=Math.max(1,...s.naive,...s.nights_watch),x=i=>L+(t.length<2?0:i*(W-L-Rr)/(t.length-1)),y=v=>T+(H-T-B)*(1-v/mx);
+  const pts=a=>a.map((v,i)=>x(i).toFixed(1)+','+y(v).toFixed(1)).join(' ');
+  const n=t.length-1,every=Math.ceil(t.length/12);
+  el.innerHTML=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block">
+    <defs><linearGradient id="gf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fd8ff" stop-opacity=".25"/><stop offset="1" stop-color="#9fd8ff" stop-opacity="0"/></linearGradient></defs>
+    ${[0,.5,1].map(f=>`<line x1="${L}" x2="${W-Rr}" y1="${y(mx*f)}" y2="${y(mx*f)}" stroke="rgba(159,216,255,.08)"/><text x="${L-8}" y="${y(mx*f)+4}" fill="#5d6a82" font-size="11" font-family="Geist Mono,monospace" text-anchor="end">${fmt(Math.round(mx*f))}</text>`).join('')}
+    ${t.map((v,i)=>i%every&&i!==n?'':`<text x="${x(i)}" y="${H-5}" fill="#5d6a82" font-size="11" font-family="Geist Mono,monospace" text-anchor="middle">#${v}</text>`).join('')}
+    <polygon fill="url(#gf)" points="${x(0)},${y(0)} ${pts(s.nights_watch)} ${x(n)},${y(0)}"/>
+    <polyline fill="none" stroke="#ff6767" stroke-width="2" stroke-dasharray="5 5" points="${pts(s.naive)}"/>
+    <polyline fill="none" stroke="#9fd8ff" stroke-width="2.5" points="${pts(s.nights_watch)}"/>
+    <circle cx="${x(n)}" cy="${y(s.naive[n])}" r="4" fill="#ff6767"/><circle cx="${x(n)}" cy="${y(s.nights_watch[n])}" r="4" fill="#9fd8ff"/>
+    <text x="${x(n)-10}" y="${y(s.naive[n])-9}" fill="#ff6767" font-size="12.5" font-family="Geist,sans-serif" text-anchor="end">${fmt(s.naive[n])} tokens</text>
+    <text x="${x(n)-10}" y="${y(s.nights_watch[n])-9}" fill="#9fd8ff" font-size="12.5" font-family="Geist,sans-serif" text-anchor="end">${fmt(s.nights_watch[n])} tokens</text></svg>`;
+}
+function nums(p){
+  if(!changed('p',p))return;
+  if(!p||!p.long_horizon){$('nums').innerHTML='<div class="num" style="grid-column:1/-1"><div class="l">Not recorded.</div></div>';return}
+  const L=p.long_horizon,C=p.crash_test||{};
+  const n=[[Math.round(L.ratio_end)+'×',`less to read on day ${L.days} (${fmt(L.cards_tokens_end)} vs ${fmt(L.naive_tokens_end)} tokens)`],
+    ['Day '+L.naive_over_window_day,`re-reading full history no longer fits a ${fmt(L.window_tokens)}-token window`],
+    [L.matched+'/'+L.truth,`planted violations caught, ${L.missed} missed, ${L.unexpected} false alarms`],
+    [C.recoveries!=null?C.recoveries+'/'+C.crashes:'?',`crashes recovered, memory ${C.cards_identical?'identical':'differs'}`]];
+  $('nums').innerHTML=n.map(([v,l])=>`<div class="num"><div class="v">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join('');
+}
+
+/* ---------- replay ---------- */
+// REC.states[0] is the state before step 1; REC.states[i+1] and REC.steps[i] are what step i's check produced.
+let REC=null,at=0;
+const wait=ms=>new Promise(r=>setTimeout(r,reduce?0:ms));
+function summary(st){
+  const t=st.seconds<0.1?'under 0.1':st.seconds;
+  if(!st.alerts.length)return `<span class="ok">No alert.</span> Check took ${t} s.`;
+  return st.alerts.map(a=>`<span class="${a.kind==='violation'?'bad':'ok'}">${a.kind==='violation'?'Violation':'Resolved'} ${esc(a.rule)}</span> ${esc(cut(a.title,70))}`).join('<br>')+`<br>Check took ${t} s.`;
+}
+function lock(on){running=on;radar.busy(on);document.body.classList.toggle('busy',on);buttons()}
+function buttons(){document.querySelectorAll('.st').forEach((b,i)=>b.disabled=running||i!==at);$('check').disabled=running||at===0}
+function show(i){
+  S=Object.assign({},REC.states[i]);
+  if(changed('v',S.vendors))vendors(S.vendors||[]);
+  happened();chart(S.series||{});nums(REC.proof);
+  $('at').textContent=S.at;first=false;
+}
+async function step(card,i){
+  if(running||i!==at)return;lock(true);
+  const res=card.querySelector('.res'),t0=Date.now();let phase='Editing Tinybird’s demo mirror…';
+  card.className='st running';
+  const tickr=setInterval(()=>{res.textContent=`${phase} ${Math.round((Date.now()-t0)/1000)} s`},250);
+  await wait(900);phase='Night’s Watch is checking Tinybird…';
+  // Paced like the real check (capped so nobody waits long); the real time is in the result line.
+  await wait(Math.min(4000,1200+REC.steps[i].seconds*250));
+  clearInterval(tickr);
+  card.className='st done';res.innerHTML=summary(REC.steps[i]);
+  at=i+1;show(at);lock(false);
+}
+function restart(){
+  if(running)return;at=0;seen.clear();
+  document.querySelectorAll('.st').forEach(b=>{b.className='st';b.querySelector('.res').textContent=''});
+  show(0);buttons();
+}
+document.querySelectorAll('.st').forEach(b=>b.onclick=()=>step(b,+b.dataset.i));
+$('check').onclick=restart;
+(async()=>{
+  try{REC=await (await fetch('demo.json')).json();show(0);buttons()}
+  catch(e){$('at').textContent='could not load the recording';$('hr').classList.add('off')}
+})();
+let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(S.series)chart(S.series,true)},120)});
+
+/* ---------- sky ---------- */
+(function(){
+  const c=$('sky'),x=c.getContext('2d');
+  function draw(){
+    const d=Math.min(2,devicePixelRatio||1),w=innerWidth,h=innerHeight;c.width=w*d;c.height=h*d;x.setTransform(d,0,0,d,0,0);
+    for(let i=0;i<Math.round(w*h/5000);i++){const px=seed(i)*w,py=seed(i+7)*h;x.fillStyle=`rgba(210,230,255,${.08+seed(i+5)*.4*Math.max(.15,1-py/h)})`;x.beginPath();x.arc(px,py,seed(i+3)<.08?1.2:.6,0,6.283);x.fill()}
+  }
+  draw();let t;addEventListener('resize',()=>{clearTimeout(t);t=setTimeout(draw,120)});
+})();
+
+/* ---------- radar: you in the centre, vendors on the inner ring, their sub-processors outside ---------- */
+const radar=(function(){
+  const cv=$('radar'),ctx=cv.getContext('2d'),TAU=Math.PI*2;
+  const ICE='159,216,255',RED='255,103,103',GRN='110,231,183',AMB='255,196,107';
+  let W=0,H=0,cx=0,cy=0,R=0,theta=-Math.PI/2,lastT=0,fast=false,V=[],SB=[],E=[];
+  function size(){
+    const w=cv.clientWidth,h=cv.clientHeight;if(w===W&&h===H)return;W=w;H=h;
+    const d=Math.min(2,devicePixelRatio||1);cv.width=w*d;cv.height=h*d;ctx.setTransform(d,0,0,d,0,0);
+    cx=w/2;cy=(h-26)/2+4;R=Math.max(50,Math.min(w/2-110,(h-26)/2-4));
+  }
+  function set(vs){
+    const old=new Map([...V,...SB].map(n=>[n.id,n])),list=[...vs].sort((a,b)=>a.vendor.localeCompare(b.vendor)),n=list.length||1;
+    V=list.map((v,i)=>({id:v.vendor,a:-Math.PI/2+.5+i*TAU/n,f:.44,name:short(v.display_name),st:vclass(v),
+      tag:(v.open_findings||[]).map(f=>f.rule).join(' '),lit:(old.get(v.vendor)||{}).lit||0,deps:v.depends_on||[]}));
+    SB=[];
+    list.forEach((v,i)=>{const subs=v.subprocessors||[],k=subs.length,sp=Math.min(.2,(TAU/n)*.75/Math.max(1,k));
+      subs.forEach((s,j)=>{const id=v.vendor+'/'+s.name;SB.push({id,p:i,a:V[i].a+(j-(k-1)/2)*sp,f:.74+seed(hash(id))*.16,
+        flag:s.approved===false?'bad':(!s.country?'unk':''),name:s.name,country:s.country,agent:s.found_by_agent,lit:(old.get(id)||{}).lit||0})})});
+    E=[];V.forEach((v,i)=>v.deps.forEach(d=>{const j=V.findIndex(x=>x.id===d);if(j>=0&&j!==i)E.push([i,j])}));
+  }
+  const xy=n=>[cx+Math.cos(n.a)*n.f*R,cy+Math.sin(n.a)*n.f*R];
+  const passed=(a,step)=>((theta-a)%TAU+TAU)%TAU<step;
+  const dot=(x,y,r,col,al)=>{ctx.fillStyle=`rgba(${col},${al})`;ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill()};
+  const colOf=st=>st==='red'?RED:st==='amber'?AMB:GRN;
+  function frame(now){
+    const dt=Math.min(.05,(now-lastT)/1000||0);lastT=now;size();
+    const sp=(fast?TAU/1.8:TAU/6)*dt,step=sp+.002;theta+=sp;if(theta>Math.PI*1.5)theta-=TAU;
+    ctx.clearRect(0,0,W,H);ctx.lineWidth=1;
+    [R*.44,R*.82,R].forEach((r,i)=>{ctx.strokeStyle=`rgba(${ICE},${i===2?.22:.09})`;ctx.beginPath();ctx.arc(cx,cy,r,0,TAU);ctx.stroke()});
+    ctx.strokeStyle=`rgba(${ICE},.06)`;ctx.beginPath();ctx.moveTo(cx-R,cy);ctx.lineTo(cx+R,cy);ctx.moveTo(cx,cy-R);ctx.lineTo(cx,cy+R);ctx.stroke();
+    for(let i=0;i<72;i++){const a=i*TAU/72,l=i%6?4:9;ctx.strokeStyle=`rgba(${ICE},${i%6?.15:.35})`;ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);ctx.lineTo(cx+Math.cos(a)*(R-l),cy+Math.sin(a)*(R-l));ctx.stroke()}
+    for(let k=0;k<36;k++){const a1=theta-k*.028,a0=a1-.03;ctx.fillStyle=`rgba(${ICE},${.13*Math.pow(1-k/36,2)})`;ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R,a0,a1);ctx.closePath();ctx.fill()}
+    const g=ctx.createLinearGradient(cx,cy,cx+Math.cos(theta)*R,cy+Math.sin(theta)*R);g.addColorStop(0,`rgba(${ICE},.1)`);g.addColorStop(1,`rgba(${ICE},.9)`);
+    ctx.strokeStyle=g;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(theta)*R,cy+Math.sin(theta)*R);ctx.stroke();ctx.lineWidth=1;
+    [...V,...SB].forEach(n=>{if(passed(n.a,step))n.lit=1;n.lit=Math.max(0,n.lit-dt*.45)});
+    // vendor-to-vendor links ("Tinybird runs on AWS"), bowed toward the centre
+    ctx.setLineDash([3,4]);
+    E.forEach(([i,j])=>{const [x1,y1]=xy(V[i]),[x2,y2]=xy(V[j]),qx=cx+((x1+x2)/2-cx)*.3,qy=cy+((y1+y2)/2-cy)*.3;
+      ctx.strokeStyle=V[j].st==='red'?`rgba(${AMB},.6)`:`rgba(${ICE},.14)`;ctx.beginPath();ctx.moveTo(x1,y1);ctx.quadraticCurveTo(qx,qy,x2,y2);ctx.stroke()});
+    ctx.setLineDash([]);
+    V.forEach(v=>{const [x,y]=xy(v);ctx.strokeStyle=v.st==='red'?`rgba(${RED},.5)`:`rgba(${ICE},${.1+v.lit*.25})`;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(x,y);ctx.stroke()});
+    SB.forEach(s=>{const [x,y]=xy(s),[px,py]=xy(V[s.p]);ctx.strokeStyle=s.flag==='bad'?`rgba(${RED},.7)`:s.flag==='unk'?`rgba(${AMB},.6)`:`rgba(${ICE},${.06+s.lit*.2})`;ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(x,y);ctx.stroke()});
+    SB.forEach(s=>{const [x,y]=xy(s);if(s.flag){dot(x,y,4,s.flag==='bad'?RED:AMB,1)}else dot(x,y,2+s.lit*1.2,ICE,.25+s.lit*.7)});
+    ctx.font='500 11.5px "Geist Mono",ui-monospace,monospace';ctx.textBaseline='middle';
+    V.forEach(v=>{
+      const [x,y]=xy(v),col=colOf(v.st),bad=v.st!=='ok';
+      if(v.lit>.02||bad)dot(x,y,9+v.lit*6,col,(bad?.25:.12)*(bad?1:v.lit));
+      dot(x,y,4+v.lit*1.4,col,bad?1:.55+v.lit*.45);
+      const right=Math.cos(v.a)>=0;ctx.textAlign=right?'left':'right';
+      ctx.fillStyle=v.st==='red'?`rgba(${RED},1)`:v.st==='amber'?`rgba(${AMB},1)`:`rgba(210,225,245,${.6+v.lit*.4})`;
+      ctx.fillText(v.tag?v.name+' · '+v.tag:v.name,x+(right?12:-12),y-13);
+    });
+    // flagged sub-processors: pulsing ring and a label pointing inward
+    const k=(now/1000%1.6)/1.6;
+    SB.filter(s=>s.flag).forEach(s=>{
+      const [x,y]=xy(s),col=s.flag==='bad'?RED:AMB;
+      ctx.strokeStyle=`rgba(${col},${1-k})`;ctx.beginPath();ctx.arc(x,y,4+k*20,0,TAU);ctx.stroke();
+      const inward=Math.cos(s.a)>=0;ctx.textAlign=inward?'right':'left';ctx.fillStyle=`rgba(${col},1)`;
+      ctx.fillText('+ '+s.name,x+(inward?-10:10),y-9);
+      ctx.fillStyle=`rgba(${col},.8)`;ctx.fillText((s.country||'country not listed')+(s.agent?' · found by agent':''),x+(inward?-10:10),y+6);
+    });
+    dot(cx,cy,14,ICE,.08);dot(cx,cy,5,'238,243,251',.95);
+    ctx.textAlign='center';ctx.fillStyle='rgba(210,225,245,.7)';ctx.fillText('YOU',cx,cy+20);
+    if(!reduce)requestAnimationFrame(frame);
+  }
+  size();requestAnimationFrame(frame);
+  if(reduce)addEventListener('resize',()=>requestAnimationFrame(frame));
+  return {set:vs=>{set(vs);if(reduce)requestAnimationFrame(frame)},busy:b=>{fast=b}};
+})();
+
+</script>
+</body>
+</html>
