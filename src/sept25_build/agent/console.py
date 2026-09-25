@@ -333,13 +333,13 @@ function chart(s){
  if(!t.length){$('chart').innerHTML='<div class="empty">no ticks yet</div>';return}
  const mx=Math.max(1,...s.naive,...s.nights_watch),x=i=>P+(t.length<2?0:i*(W-P-10)/(t.length-1)),y=v=>H-18-(v/mx)*(H-30);
  const line=(a,c)=>`<polyline fill="none" stroke="${c}" stroke-width="3" points="${a.map((v,i)=>x(i)+','+y(v)).join(' ')}"/>`+a.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="3.5" fill="${c}"/>`).join('');
- const last=t.length-1;
+ const last=t.length-1,left=x(last)<W/2,lx=left?x(last)+10:x(last)-6,anc=left?'start':'end';
  $('chart').innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="150">
   <line x1="${P}" y1="${H-18}" x2="${W}" y2="${H-18}" stroke="#1f2a44"/><text x="4" y="16" fill="#8b97b8" font-size="12">${fmt(mx)}</text><text x="4" y="${H-20}" fill="#8b97b8" font-size="12">0</text>
   ${t.map((v,i)=>`<text x="${x(i)}" y="${H-3}" fill="#8b97b8" font-size="11" text-anchor="middle">t${v}</text>`).join('')}
   ${line(s.naive,'#f87171')}${line(s.nights_watch,'#34d399')}
-  <text x="${x(last)-6}" y="${y(s.naive[last])-8}" fill="#f87171" font-size="13" text-anchor="end">naive ${fmt(s.naive[last])} (computed, not run)</text>
-  <text x="${x(last)-6}" y="${y(s.nights_watch[last])-8}" fill="#34d399" font-size="13" text-anchor="end">Night's Watch ${fmt(s.nights_watch[last])}</text></svg>`;
+  <text x="${lx}" y="${Math.max(30,y(s.naive[last])-8)}" fill="#f87171" font-size="13" text-anchor="${anc}">naive ${fmt(s.naive[last])} (computed, not run)</text>
+  <text x="${lx}" y="${y(s.nights_watch[last])+18}" fill="#34d399" font-size="13" text-anchor="${anc}">Night's Watch ${fmt(s.nights_watch[last])}</text></svg>`;
 }
 function nums(p){
  if(!p||!p.long_horizon){$('nums').innerHTML='<div class="num"><div class="l">Run "Proof scorecard" for the 365-day numbers</div></div>';return}
