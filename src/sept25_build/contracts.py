@@ -47,6 +47,19 @@ APPROVED_COUNTRIES = [
 ]
 MAX_RETENTION_DAYS = 90
 
+# The vendors we watch, and names they appear under in OTHER vendors' sub-processor lists.
+# A sub-processor matching one of these is linked to that vendor's node instead of being crawled
+# ("link, don't crawl"): no recursive fetching, and each company is exactly one node, so cycles
+# (Tinybird -> AWS -> ...) can't loop. Add aliases as real lists show up.
+VENDORS = {"aws": "AWS", "nimble": "Nimble", "tinybird": "Tinybird", "liquid": "Liquid AI", "bfl": "Black Forest Labs"}
+VENDOR_ALIASES = {
+    "aws": ["amazon web services", "aws", "amazon.com"],
+    "nimble": ["nimble way", "nimbleway", "nimble"],
+    "tinybird": ["tinybird"],
+    "liquid": ["liquid ai"],
+    "bfl": ["black forest labs"],
+}
+
 RuleId = Literal["R1", "R2", "R3"]
 
 
@@ -140,6 +153,8 @@ class StateCard(BaseModel):
     policy_paragraph_hashes: list[str] = []
     ledger: dict[str, dict] = {}     # every sub-processor ever seen: first_seen, times_added, last_removed
     sentence_verdicts: dict[str, dict] = {}  # judged policy sentences still in the terms: kind, text, allows/days, by
+    depends_on: list[str] = []       # watched vendors that appear in this vendor's sub-processor list
+    exposed_via: list[str] = []      # red vendors reachable through depends_on (fourth-party risk)
 
     def prompt_view(self) -> dict:
         return self.model_dump(mode="json", exclude={"policy_paragraph_hashes", "ledger", "sentence_verdicts",
@@ -151,6 +166,7 @@ class StateCard(BaseModel):
             "status": self.status, "is_demo_mirror": self.is_demo_mirror,
             "subprocessors_json": json.dumps([s.model_dump() for s in self.subprocessors]),
             "open_findings_json": json.dumps([f.model_dump() for f in self.open_findings]),
+            "depends_on_json": json.dumps(self.depends_on), "exposed_via_json": json.dumps(self.exposed_via),
             "card_json": self.model_dump_json(), "updated_at": self.updated_at.isoformat(),
         }
 

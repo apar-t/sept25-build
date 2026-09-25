@@ -49,6 +49,18 @@ Each person runs their own coding agent. **Agents edit only their own lane.** If
 - **Collisions:** if `git pull --rebase` conflicts in a file outside your lane, keep the upstream (other person's) version, which during a rebase is `git checkout --ours <file>`, then tell your human what you dropped. Never force-push.
 - Commit small and often (every 30–45 min), with messages that say which lane: `B: triage prompt`.
 
+## Notes for lane A (ingest), agreed with B
+The agent (lane B) reads `nw_snapshots` and nothing else from A. To keep the demo reliable:
+1. **Build `contracts.Snapshot`**, write with `rawtree.insert("snapshots", [s.to_row() for s in snaps])`. Match `fixtures/snapshots/*.json`.
+2. **Vendor slugs are fixed:** `aws`, `nimble`, `tinybird`, `liquid`, `bfl` (see `contracts.VENDORS`). The injectable copy is `<vendor>-mirror`, `is_demo_mirror=True`, `display_name="<Vendor> (demo mirror)"`.
+3. **`subprocessors`: name / purpose / country exactly as the page shows them.** B normalizes countries. If a vendor publishes no list, send `[]`; never invent entries.
+4. **`policy_text`: the privacy/DPA page as markdown, paragraphs separated by blank lines, same extraction format on every fetch.** Strip nav, cookie banners, footers. B compares paragraph by paragraph; unstable formatting costs LLM calls.
+5. **Only insert after a real fetch, with a fresh `fetched_at`.** A failed fetch should insert nothing (an empty list or empty policy is treated as a failed fetch and ignored).
+6. **`run_once(vendors: list[str] | None = None)`** so the demo can re-fetch only the mirror after an injection.
+7. **The mirror page must be public and uncached**, so Nimble sees the injection immediately. Injections can reword, append or delete sentences/paragraphs; B handles all three.
+8. **One level only: don't crawl sub-processors' own sub-processor pages.** Deeper links come from name matching on B's side ("link, don't crawl"): a sub-processor whose name matches `contracts.VENDOR_ALIASES` (e.g. "Amazon Web Services, Inc." in Tinybird's list) becomes an edge to the AWS node we already watch. Each company is one node and traversal keeps a visited set, so cycles (Tinybird → AWS → Tinybird) can't loop. If you see a sponsor listed under a name the aliases miss, add it to `VENDOR_ALIASES` and say so in the commit.
+9. **Handshake:** once one real snapshot is in `nw_snapshots`, B runs `uv run scripts/tick.py --no-fetch`.
+
 ## Build rules
 - One tick = ingest (A) → agent (B) → dashboard reads (C). `uv run scripts/tick.py` runs a full tick; the demo triggers it manually, never on a timer.
 - The demo mirror is the **only** page we inject into. It must always display as "(demo mirror)"; never imply a real vendor changed its terms.

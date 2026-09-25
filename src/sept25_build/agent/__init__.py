@@ -7,6 +7,7 @@ Interface the other lanes rely on:
 """
 
 from ..contracts import Alert, TickLog
+from . import graph
 from .core import naive_tokens, step
 from .store import MemoryStore, RawTreeStore
 
@@ -31,5 +32,10 @@ def run_tick(store=None, run_id: str = "live") -> list[Alert]:
         out_cards.append(new)
         out_alerts += alerts
         out_ticks += [log, naive]
+    # Fourth-party links: an upstream vendor turning red changes cards that didn't change themselves.
+    merged = {**cards, **{c.vendor: c for c in out_cards}}
+    for c in graph.link(merged):
+        if c not in out_cards:
+            out_cards.append(c)
     store.write(out_cards, out_alerts, out_ticks)
     return out_alerts
