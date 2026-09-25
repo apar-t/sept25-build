@@ -199,6 +199,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
         if path == "/":
+            self._send(200, _stage_page().encode(), "text/html; charset=utf-8")
+        elif path == "/classic":  # lane B's original all-panels page, kept as a fallback
             self._send(200, PAGE.replace("__SUFFIX__", SUFFIX or "(stage tables)").encode(), "text/html; charset=utf-8")
         elif path == "/api/state":
             self._json(200, state())
@@ -219,6 +221,19 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         if "/api/state" not in (args[0] if args else ""):
             super().log_message(fmt, *args)
+
+
+WEB_CONSOLE = Path(__file__).resolve().parents[3] / "web" / "console.html"
+
+
+def _stage_page() -> str:
+    """Lane C's stage page (web/console.html), re-read on every load so design tweaks need no
+    restart. Falls back to the classic page if it's missing."""
+    try:
+        page = WEB_CONSOLE.read_text()
+    except OSError:
+        page = PAGE
+    return page.replace("__SUFFIX__", SUFFIX or "(stage tables)")
 
 
 PAGE = r"""<!doctype html>

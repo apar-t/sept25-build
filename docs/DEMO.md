@@ -2,6 +2,8 @@
 
 The stage console (`uv run python -m sept25_build.agent.console`, http://127.0.0.1:8790) has these buttons: **Noise, Inject DataHarvest (no country), Inject training clause, Reset, Run tick, Proof scorecard**. Its panels are the supply-chain graph, alerts, agent episode trace, memory edits and the token chart. The numbers below come from the `proof` and `preflight` runs at 14:57 PDT, 2026-09-25.
 
+> **Stage page:** http://127.0.0.1:8790 now serves lane C's guided page (`web/console.html`): four step cards (1 Harmless edit, 2 New sub-processor, 3 Policy change, 4 Vendor backs out). **One click = the inject + the check**, and the result appears on the card (about 15-20 s). "Check now" runs a tick only. Click each step **once** and wait for its result; the panels catch up within a few seconds. Lane B's original all-panels page is at http://127.0.0.1:8790/classic as a fallback. Wherever this runbook says "click Inject X then Run tick", on the stage page that's a single step click.
+
 ## 1. T-30 min setup checklist
 
 - [ ] **Present from this laptop.** The keys, `.env`, the site server (:8765) and the tunnel all live here.
