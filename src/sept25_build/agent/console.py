@@ -238,7 +238,9 @@ def _why(a: dict) -> str:
             if m:
                 s = (f"Its new sub-processor {m.group(1)} processes customer data in {m.group(2)}, "
                      f"which is not an approved country")
-                return s + (" (found by the agent on the sub-processor's own website)." if "agent followed" in ex else ".")
+                return s + (". Tinybird doesn't list a location; Night's Watch found it on DataHarvest's own website."
+                            .replace("Tinybird", _name(a.get("vendor", ""))).replace("DataHarvest", m.group(1).split()[0])
+                            if "agent followed" in ex else ".")
         else:
             m = re.match(r"(.+?) no longer processes data in (.+?)\.", ex)
             if m:
@@ -253,8 +255,19 @@ def _why(a: dict) -> str:
     return title + "."
 
 
+def _excerpt(res: str) -> str:
+    """One readable line from a tool result: prefer a line naming a location, strip markdown and tags."""
+    text = re.sub(r"^\[[^\]]*\]\s*", "", res)                      # "[via Nimble] "
+    text = re.sub(r"[*#_`>]+", " ", text)
+    parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+|\s{2,}|\n", text) if p.strip()]
+    hit = next((p for p in parts if re.search(r"location|headquarter|processing", p, re.I)), None)
+    return (hit or (parts[0] if parts else ""))[:140]
+
+
 def _friendly_tool(s: dict) -> dict:
     tool, args, res = s.get("tool", ""), s.get("args") or {}, str(s.get("result") or "")
+    if tool in ("fetch_page", "search_web"):
+        res = _excerpt(res)
     if tool == "fetch_page":
         url = args.get("url", "") if isinstance(args, dict) else str(args)
         from urllib.parse import urlparse
@@ -487,7 +500,10 @@ def _simulate(job: _Job, scenario: str) -> None:
     p = subprocess.run(SCENARIOS[scenario], cwd=ROOT, env=env, capture_output=True, text=True, timeout=60)
     if p.returncode != 0:
         raise RuntimeError(((p.stderr or p.stdout) or "inject failed").strip()[-300:])
-    job.d["steps"][-1]["detail"] = ANSI.sub("", p.stdout).strip().splitlines()[-1][:200] if p.stdout.strip() else ""
+    job.d["steps"][-1]["detail"] = {
+        "new_subprocessor": "Added DataHarvest Ltd to Tinybird's sub-processor list, with no location listed",
+        "training_clause": "Changed Tinybird's AI-training clause to allow training on customer data",
+        "undo": "Put Tinybird's pages back to the original"}.get(scenario, "")
     job.start("Reading Tinybird's pages")
     proc = subprocess.Popen(TICK, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                             bufsize=1)
