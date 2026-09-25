@@ -40,9 +40,12 @@ Each person runs their own coding agent. **Agents edit only their own lane.** If
 |---|---|---|---|
 | **A: ingest** | _claim: put your GitHub handle here_ | `src/sept25_build/ingest/`, `scripts/inject.py`, the demo mirror page | `ingest.run_once() -> list[Snapshot]`, written to `nw_snapshots` |
 | **B: agent** | apar-t | `src/sept25_build/agent/`, `scripts/tick.py` | `agent.run_tick()`: writes `nw_state_cards`, `nw_alerts`, `nw_ticks` |
+| **B: demo target site** | apar-t | `site/`: the monitored company's trust center (privacy, terms, sub-processors) + a "demo mirror" of each vendor's sub-processor list and DPA, served with `Cache-Control: no-store` through a cloudflared tunnel; `site/inject.py` injects violations | the URLs lane A fetches; the demo's injection commands |
 | **C: data + web** | _claim: put your GitHub handle here_ | `web/`, `src/sept25_build/rawtree.py`, RawTree queries/endpoints, pitch + backup video | the dashboard |
 | **Shared** | everyone | `src/sept25_build/contracts.py`, `AGENTS.md`, `docs/`, `pyproject.toml` | |
 
+- **Two different websites, don't mix them up:** `web/` (lane C) is **our product**: the Night's Watch landing page and dashboard that judges look at. `site/` (lane B) is **the thing being watched**: the fictional customer's trust center and the vendor mirror pages that Nimble fetches and that we inject into. The landing page may link to it, but don't restyle or move `site/`.
+- **Lane A:** fetch from the `site/` URLs (see `site/README.md`) and use `site/inject.py` for injections instead of writing a separate `scripts/inject.py`.
 - **`contracts.py` is the interface between lanes.** Import `Snapshot`, `StateCard`, `Alert`, `TickLog`, `TABLES`, `RULES` from it. Never redefine these shapes locally. Adding an optional field is fine (say so in the commit message); renaming or removing one needs the team's agreement first.
 - **Build against fixtures, not each other.** `fixtures/snapshots/` has synthetic snapshots, including a noise-only change and three injected violations (see `fixtures/README.md`). Nobody should be blocked waiting on another lane.
 - **Dependencies:** changing `pyproject.toml`/`uv.lock` conflicts easily. Pull first, add the dependency, commit it on its own, push right away.
