@@ -2,6 +2,8 @@
 
     uv run python -m sept25_build.agent.runner                  # tick every 30s against RawTree
     uv run python -m sept25_build.agent.runner --fetch          # also run lane A's ingest each cycle
+    uv run python -m sept25_build.agent.runner --fetch --vendors tinybird --agent --narrate --cycles 1   # stage tick
+    uv run python -m sept25_build.agent.runner --store file:/tmp/rehearsal --fetch --agent   # rehearsal: no live writes
     uv run python -m sept25_build.agent.runner --every 10 --cycles 3 --adaptive
     uv run python -m sept25_build.agent.runner --fetch --agent       # + the tool-using agent (GPT-5.6 Sol)
     uv run python -m sept25_build.agent.runner --store file:.nw_state   # durable local store instead
@@ -119,6 +121,8 @@ def main() -> None:
     ap.add_argument("--every", type=float, default=30, help="seconds between cycles")
     ap.add_argument("--cycles", type=int, default=0, help="stop after N cycles (0 = forever)")
     ap.add_argument("--fetch", action="store_true", help="run lane A's ingest.run_once() each cycle")
+    ap.add_argument("--vendors", nargs="*", default=None,
+                    help="with --fetch: only these vendors (e.g. tinybird) to save Nimble credits and time")
     ap.add_argument("--adaptive", action="store_true", help="skip quiet vendors until due (card.check_every)")
     ap.add_argument("--store", default="rawtree", help="rawtree | file:<dir> | memory")
     ap.add_argument("--run-id", default="live")
@@ -149,8 +153,13 @@ def main() -> None:
             try:
                 if args.fetch:
                     from .. import ingest
-                    if hasattr(ingest, "run_once"):
-                        ingest.run_once()
+                    if kind != "rawtree" and hasattr(ingest, "fetch_vendor"):
+                        # rehearsal store: read through Nimble but keep snapshots OUT of live RawTree
+                        from ..contracts import VENDORS
+                        snaps = [x for x in (ingest.fetch_vendor(v) for v in (args.vendors or list(VENDORS))) if x]
+                        store.add_snapshots(snaps)
+                    elif hasattr(ingest, "run_once"):
+                        ingest.run_once(args.vendors)
                     else:
                         print("runner: ingest.run_once() not available yet (lane A); agent only")
                 alerts = run_tick(store, run_id=args.run_id, adaptive=args.adaptive, agent=args.agent)
