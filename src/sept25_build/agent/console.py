@@ -15,6 +15,7 @@ import re
 import subprocess
 import threading
 import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -184,6 +185,380 @@ def run_action(name: str) -> tuple[int, dict]:
         _lock.release()
 
 
+# ---------------------------------------------------------------------------------------------------------
+# B2B app API (/api/overview, /api/onboard, /api/simulate, /api/job/<id>) for src/sept25_build/agent/ui/app.html
+# ---------------------------------------------------------------------------------------------------------
+
+APP_PAGE = Path(__file__).resolve().parent / "ui" / "app.html"
+TUNNEL_FILE = ROOT / "site" / "live" / "tunnel_url.txt"
+POLICY = {"R1": "International transfers", "R2": "AI and model training", "R3": "Retention"}
+TICK = PY + ["-m", "sept25_build.agent.runner", "--fetch", "--vendors", "tinybird", "--agent", "--narrate",
+             "--cycles", "1"]
+SCENARIOS = {
+    "new_subprocessor": INJECT + ["add-subprocessor", "--vendor", "tinybird", "--name", "DataHarvest Ltd",
+                                  "--country", "", "--url", "/companies/dataharvest"],
+    "training_clause": INJECT + ["change-policy", "--vendor", "tinybird", "--clause", "training"],
+    "undo": INJECT + ["reset"],
+}
+_jobs: dict[str, dict] = {}
+_ocache: dict = {"at": 0.0, "data": None}
+
+
+def _site_url() -> str:
+    url = os.environ.get("SITE_URL") or (TUNNEL_FILE.read_text() if TUNNEL_FILE.exists() else "")
+    return url.strip().rstrip("/")
+
+
+def _name(vendor: str) -> str:
+    from ..contracts import VENDORS
+    slug = vendor.removesuffix("-mirror")
+    return VENDORS.get(slug, slug)
+
+
+def _plain(s: str) -> str:
+    return re.sub(r"\s*\(demo mirror\)", "", s or "")
+
+
+def _policy(rule: str) -> dict | None:
+    if rule not in POLICY:
+        return None
+    return {"doc": "Privacy Policy", "section": POLICY[rule], "url": _site_url() + "/privacy"}
+
+
+def _headline(kind: str, vendor: str) -> str:
+    n = _name(vendor)
+    return f"{n} is no longer compliant with your Privacy Policy" if kind == "violation" else f"{n} is compliant again"
+
+
+def _why(a: dict) -> str:
+    rule, kind, ex, title = a.get("rule"), a.get("kind"), a.get("explanation") or "", _plain(a.get("title") or "")
+    if rule == "R1":
+        if kind == "violation":
+            m = re.match(r"(.+?) processes data in (.+?), which is not", ex)
+            if m:
+                s = (f"Its new sub-processor {m.group(1)} processes customer data in {m.group(2)}, "
+                     f"which is not an approved country")
+                return s + (" (found by the agent on the sub-processor's own website)." if "agent followed" in ex else ".")
+        else:
+            m = re.match(r"(.+?) no longer processes data in (.+?)\.", ex)
+            if m:
+                return f"It no longer sends customer data to {m.group(1)} in {m.group(2)}."
+    if rule == "R2":
+        return ("Its terms now allow training AI models on customer data." if kind == "violation"
+                else "Its terms no longer allow training AI models on customer data.")
+    if rule == "R3":
+        m = re.search(r"(\d+) days", title)
+        return (f"It now keeps customer data for {m.group(1) if m else 'more than 90'} days; your policy allows 90 at most."
+                if kind == "violation" else "Its data retention is back within 90 days.")
+    return title + "."
+
+
+def _friendly_tool(s: dict) -> dict:
+    tool, args, res = s.get("tool", ""), s.get("args") or {}, str(s.get("result") or "")
+    if tool == "fetch_page":
+        url = args.get("url", "") if isinstance(args, dict) else str(args)
+        from urllib.parse import urlparse
+        return {"text": f"Opened {urlparse(url).path or url} via Nimble", "detail": res[:200]}
+    if tool == "recall":
+        return {"text": "Checked its memory of this vendor", "detail": res[:200]}
+    if tool == "search_web":
+        return {"text": f"Searched the web for {args.get('query', '') if isinstance(args, dict) else ''}".strip(),
+                "detail": res[:200]}
+    if tool == "judge_sentences":
+        return {"text": "Asked Liquid to judge the policy sentences", "detail": res[:200]}
+    if tool == "check_fourth_parties":
+        return {"text": "Checked its vendors' own vendors", "detail": res[:200]}
+    return {"text": tool or "step", "detail": res[:200]}
+
+
+def _op_phrase(o: dict) -> str:
+    op, f, b, a = o["op"], o["field"], _plain(o["before"]), _plain(o["after"])
+    short = lambda x: " ".join(str(x).split())[:80]
+    if op == "set":
+        return f"Changed {f}: {short(b)} -> {short(a)}"
+    if op == "open_finding":
+        return f"Opened a finding: {f} ({POLICY.get(f, f)})"
+    if op == "close_finding":
+        return f"Closed the finding {f} ({POLICY.get(f, f)})"
+    if op == "remember":
+        return f"Remembered {f}: {short(a)}"
+    if op == "forget":
+        return f"Forgot {f}: {short(b)}"
+    if op == "compact":
+        return f"Compacted its {f}"
+    if op == "keep_on_fetch_gap":
+        return "Kept its memory through an empty fetch"
+    return f"{op} {f}"
+
+
+def overview() -> dict:
+    with _cache_lock:
+        if _ocache["data"] is not None and time.time() - _ocache["at"] < 1.5:
+            return _ocache["data"]
+    try:
+        cards = RawTreeStore().latest_cards()
+    except Exception as e:
+        print(f"latest_cards failed: {type(e).__name__}")
+        cards = {}
+    site = _site_url()
+    vendors, discarded, mem_tokens = [], 0, 0
+    for v, c in sorted(cards.items()):
+        subs = []
+        for s in c.subprocessors:
+            country, found, ev = s.country.strip(), False, s.url or ""
+            if not country:
+                inv = c.investigations.get(policy.sub_key(s), {})
+                if inv.get("country"):
+                    country, found, ev = inv["country"], True, inv.get("evidence_url") or ev
+            subs.append({"name": s.name, "country": country, "found_by_agent": found, "evidence_url": ev})
+        status = "not_compliant" if c.status == "red" else ("exposed" if c.exposed_via else "compliant")
+        issues = [{"rule": f.rule, "title": _plain(f.summary), "policy": _policy(f.rule), "detail": _plain(f.summary)}
+                  for f in c.open_findings]
+        if not issues and c.exposed_via:
+            issues = [{"rule": "", "title": "Depends on a vendor that is not compliant",
+                       "policy": None, "detail": "Exposed via " + ", ".join(_name(x) for x in c.exposed_via)}]
+        vendors.append({"slug": v.removesuffix("-mirror"), "name": _name(v), "status": status,
+                        "subprocessor_count": len(c.subprocessors), "subprocessors": subs, "issues": issues})
+        discarded += c.counters.get("noise", 0) + c.counters.get("unchanged", 0)
+        mem_tokens += len(json.dumps(c.prompt_view())) // 4
+    latest = None
+    alerts = [a for a in _alerts() if not (a.get("title") or "").startswith("Baseline")]
+    if alerts:
+        a = alerts[0]
+        vrow = _q(f"SELECT toString(vendor) v, toString(alert_id) i FROM {TABLES['alerts']} "
+                  f"WHERE toString(tick) = '{a['tick']}' AND toString(rule) = '{a['rule']}'")
+        vendor = vrow[0]["v"] if vrow else "tinybird-mirror"
+        ep = next((e for e in _episodes() if e["tick"] == a["tick"] and e["vendor"] == vendor), None)
+        agent = None
+        if ep:
+            steps = [_friendly_tool(s) for s in ep["steps"]]
+            for loc in (ep["committed"] or {}).get("locations") or []:
+                if isinstance(loc, dict):
+                    steps.append({"text": f"Verified: {loc.get('name', '')} processes data in {loc.get('country', '')}",
+                                  "detail": loc.get("evidence_url", "")})
+                else:
+                    m = re.match(r"(.+?):\s*(.+)", str(loc))
+                    steps.append({"text": f"Verified: {m.group(1)} processes data in {m.group(2)}" if m else
+                                  f"Verified: {loc}", "detail": ""})
+            agent = {"model": ep["model"], "seconds": round(ep["latency_ms"] / 1000, 1), "steps": steps}
+        edits = [_op_phrase(o) for o in _memory_ops() if o["tick"] == a["tick"] and o["vendor"] == vendor][:5][::-1]
+        latest = {"kind": a["kind"], "vendor": _name(vendor), "title": _plain(a["title"]),
+                  "headline": _headline(a["kind"], vendor), "why": _why(a), "policy": _policy(a["rule"]),
+                  "evidence_url": a["evidence_url"], "tick": a["tick"], "agent": agent, "memory_edits": edits}
+    naive: dict[str, tuple[int, int]] = {}  # latest naive-history size per vendor, summed
+    for r in _q(f"SELECT toString(tick) t, toString(vendor) v, toString(input_tokens) i FROM {TABLES['ticks']} "
+                f"WHERE toString(agent) = 'naive'"):
+        if r["v"] not in naive or _int(r["t"]) >= naive[r["v"]][0]:
+            naive[r["v"]] = (_int(r["t"]), _int(r["i"]))
+    data = {"site_url": site, "suffix": SUFFIX, "watching": bool(cards), "vendors": vendors, "latest_event": latest,
+            "stats": {"checks": max((c.tick for c in cards.values()), default=0), "discarded": discarded,
+                      "memory_tokens": mem_tokens, "naive_tokens": sum(x[1] for x in naive.values()), "proof": _proof()}}
+    with _cache_lock:
+        _ocache.update(at=time.time(), data=data)
+    return data
+
+
+class _Job:
+    def __init__(self, kind: str):
+        self.d = {"id": uuid.uuid4().hex[:10], "kind": kind, "status": "running", "steps": [], "error": None}
+        _jobs[self.d["id"]] = self.d
+
+    def add(self, text: str, detail: str = "", state: str = "active") -> dict:
+        s = {"text": text, "state": state, "detail": detail}
+        self.d["steps"].append(s)
+        return s
+
+    def start(self, text: str, detail: str = "") -> dict:
+        """Mark the previous active step done, then open a new active one."""
+        for s in self.d["steps"]:
+            if s["state"] == "active":
+                s["state"] = "done"
+        return self.add(text, detail)
+
+    def finish(self, error: str | None = None) -> None:
+        for s in self.d["steps"]:
+            if s["state"] == "active":
+                s["state"] = "failed" if error else "done"
+        if error:
+            self.add("Something went wrong", error, "failed")
+        self.d.update(status="failed" if error else "done", error=error)
+        with _cache_lock:
+            _cache["data"] = None
+            _ocache["data"] = None
+
+
+def _launch(kind: str, fn, *args) -> tuple[int, dict]:
+    if not _lock.acquire(blocking=False):
+        return 409, {"error": "busy"}
+    job = _Job(kind)
+
+    def run():
+        try:
+            fn(job, *args)
+            job.finish()
+        except Exception as e:  # noqa: BLE001
+            job.finish(f"{type(e).__name__}: {str(e)[:300]}")
+        finally:
+            _lock.release()
+    threading.Thread(target=run, daemon=True).start()
+    return 200, {"job": job.d["id"]}
+
+
+def _onboard(job: _Job, url: str) -> None:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from .. import ingest
+    from ..contracts import VENDORS
+    from . import run_tick
+    url = url.strip().rstrip("/")
+    if not re.match(r"^https?://", url):
+        url = "https://" + url
+    url = re.sub(r"/(subprocessors|privacy|terms)$", "", url)
+    s = job.start("Reading your sub-processor list", url + "/subprocessors")
+    html, via = ingest._read(url + "/subprocessors")
+    slugs = [x for x in dict.fromkeys(re.findall(r"/vendors/([a-z0-9-]+)/", html)) if x in VENDORS]
+    if not slugs:
+        raise RuntimeError(f"no vendors found on {url}/subprocessors")
+    s["detail"] = f"Found {len(slugs)} vendors: {', '.join(VENDORS[x] for x in slugs)}"
+    s["state"] = "done"
+    os.environ["SITE_URL"] = url
+    steps = {v: job.add(f"Reading {VENDORS[v]}'s sub-processors and data terms") for v in slugs}
+    snaps = []
+    with ThreadPoolExecutor(len(slugs)) as pool:
+        futs = {pool.submit(ingest.fetch_vendor, v): v for v in slugs}
+        for f in as_completed(futs):
+            v, snap = futs[f], f.result()
+            if snap is None:
+                steps[v].update(state="failed", detail="could not read this vendor's pages")
+                continue
+            snaps.append(snap)
+            steps[v].update(state="done", detail=f"{len(snap.subprocessors)} sub-processors · via Nimble")
+    if not snaps:
+        raise RuntimeError("could not read any vendor's pages")
+    rawtree.insert("snapshots", [x.to_row() for x in snaps])
+
+    class Fresh(RawTreeStore):  # the snapshots just fetched: no RawTree read-after-write lag on fresh tables
+        written: list = []
+        ticks: list = []
+
+        def latest_snapshots(self):
+            return snaps
+
+        def write(self, cards, alerts, ticks, ops=()):
+            self.written, self.ticks = list(cards), list(ticks)
+            super().write(cards, alerts, ticks, ops)
+
+    s = job.start("Checking their terms against your Privacy Policy")
+    store = Fresh()
+    run_tick(store, run_id="live", agent=True)
+    judged = sum(1 for c in store.written for v in c.sentence_verdicts.values()
+                 if "liquid" in (v.get("by"), (v.get("first_opinion") or {}).get("by")))
+    s["detail"] = (f"Liquid judged {judged} policy sentences" if judged else
+                   f"Checked {len(store.written)} vendors' terms against your policy")
+    s = job.start("Building memory")
+    toks = sum(len(json.dumps(c.prompt_view())) // 4 for c in store.written)
+    s["detail"] = f"{len(store.written)} state cards, {toks:,} tokens"
+    want = {c.vendor for c in store.written}
+    for _ in range(30):  # fresh tables: wait until the page will actually see the new memory
+        try:
+            if want <= set(RawTreeStore().latest_cards()):
+                break
+        except Exception:
+            pass
+        time.sleep(0.5)
+    job.start(f"Watching {len(snaps)} vendors", url)
+
+
+_LINE = re.compile(r"^\d\d:\d\d:\d\d\s+")
+
+
+def _once(job: "_Job", text: str, detail: str) -> None:
+    """The same kind of step twice in one run (e.g. Liquid judging again inside the episode): update, don't repeat."""
+    prev = next((st for st in job.d["steps"] if st["text"] == text), None)
+    if prev is None:
+        job.start(text, detail)
+    elif detail:
+        prev["detail"] = detail
+
+
+def _simulate(job: _Job, scenario: str) -> None:
+    env = dict(os.environ, NO_COLOR="1", PYTHONUNBUFFERED="1", SITE_URL=_site_url())
+    job.start("Applying the change to Tinybird's demo mirror")
+    p = subprocess.run(SCENARIOS[scenario], cwd=ROOT, env=env, capture_output=True, text=True, timeout=60)
+    if p.returncode != 0:
+        raise RuntimeError(((p.stderr or p.stdout) or "inject failed").strip()[-300:])
+    job.d["steps"][-1]["detail"] = ANSI.sub("", p.stdout).strip().splitlines()[-1][:200] if p.stdout.strip() else ""
+    job.start("Reading Tinybird's pages")
+    proc = subprocess.Popen(TICK, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                            bufsize=1)
+    result, tail = None, []
+    t0 = time.time()
+    for raw in proc.stdout:
+        line = _LINE.sub("", ANSI.sub("", raw.rstrip("\n"))).strip()
+        tail = (tail + [line])[-8:]
+        if time.time() - t0 > 170:
+            proc.kill()
+            raise RuntimeError("the check took too long")
+        if "(demo mirror)" in line and " via " in line and "companies" in line:
+            m = re.search(r"(\d+) companies", line)
+            job.d["steps"][-1].update(text="Read Tinybird's pages via Nimble",
+                                      detail=f"{m.group(1) if m else '?'} sub-processors · via {line.split(' via ')[-1]}")
+        elif "(demo mirror)" in line and "FAILED" in line:
+            job.d["steps"][-1].update(detail="Nimble read failed: " + line.split("FAILED", 1)[-1].strip()[:160])
+        elif line.startswith("agent: episode on") and "open questions:" in line:
+            q = line.split("open questions:", 1)[1].strip()
+            if q and q != "none":
+                job.start(f"Found a sub-processor with no listed location: {q}")
+                job.start("Investigating")
+            else:
+                job.start("Investigating the change")
+        elif line.startswith("tool fetch_page("):
+            m = re.match(r"tool fetch_page\((.*?)\) ->", line)
+            from urllib.parse import urlparse
+            u = m.group(1) if m else ""
+            opened = job.start(f"Opened {urlparse(u).path or u} via Nimble", u)
+            opened["_trunc"] = urlparse(u).path if len(u) >= 70 else ""
+        elif line.startswith("tool recall("):
+            _once(job, "Checked its memory of this vendor", "")
+        elif line.startswith("tool search_web("):
+            job.start("Searched the web", line[16:].split(") ->")[0][:120])
+        elif line.startswith("commit ") and "verified on" in line:
+            m = re.match(r"commit (.+?): (.+?), verified on (.*)", line)
+            if m:
+                for st in job.d["steps"]:  # narration cuts long URLs at 70 chars: restore the full path
+                    tr = st.pop("_trunc", "")
+                    if tr and m.group(3).strip().startswith(tr):
+                        st["text"] = f"Opened {m.group(3).strip()} via Nimble"
+                        st["detail"] = st.get("detail", "").split(tr)[0] + m.group(3).strip()
+                job.start(f"Verified: {m.group(1)} processes data in {m.group(2)}", m.group(3))
+        elif line.startswith("commit ") and "REJECTED" in line:
+            job.start("Rejected a location it could not verify", line[7:])
+        elif re.match(r"Liquid .* judged", line):
+            _once(job, "Liquid read the changed policy sentence", line)
+        elif re.match(r"\S+ (confirmed|overrode) ", line):
+            q = re.search(r'"(.*)"', line)
+            _once(job, "GPT-5.6 Sol double-checked it", q.group(1) if q else "")
+        elif line.startswith("memory:"):
+            job.start("Updated its memory", line[7:].strip()[:200])
+        elif line.startswith(("VIOLATION", "resolved")):
+            kind = "violation" if line.startswith("VIOLATION") else "resolved"
+            parts = line.split(None, 2)
+            title = _plain(parts[2]) if len(parts) > 2 else ""
+            if result is None or kind == "violation":
+                result = (kind, title)
+        elif "runner: cycle" in line and "failed" in line:
+            tail.append(line)
+    rc = proc.wait()
+    for st in job.d["steps"]:
+        st.pop("_trunc", None)
+    if rc != 0:
+        raise RuntimeError("the check failed: " + " | ".join(tail[-3:])[-300:])
+    if result:
+        job.start("Result: " + _headline(result[0], "tinybird"), result[1])
+    else:
+        job.start("Result: nothing changed that affects your policies")
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code: int, body: bytes, ctype: str) -> None:
         self.send_response(code)
@@ -199,7 +574,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
         if path == "/":
+            self._send(200, _app_page().encode(), "text/html; charset=utf-8")
+        elif path == "/guided":  # lane C's guided stage page
             self._send(200, _stage_page().encode(), "text/html; charset=utf-8")
+        elif path == "/api/overview":
+            self._json(200, overview())
+        elif path.startswith("/api/job/"):
+            j = _jobs.get(path.rsplit("/", 1)[-1])
+            self._json(200 if j else 404, j or {"error": "no such job"})
         elif path == "/classic":  # lane B's original all-panels page, kept as a fallback
             self._send(200, PAGE.replace("__SUFFIX__", SUFFIX or "(stage tables)").encode(), "text/html; charset=utf-8")
         elif path == "/api/state":
@@ -208,22 +590,45 @@ class Handler(BaseHTTPRequestHandler):
             self._json(404, {"error": "not found"})
 
     def do_POST(self):
-        if self.path.split("?")[0] != "/api/action":
+        path = self.path.split("?")[0]
+        if path not in ("/api/action", "/api/onboard", "/api/simulate"):
             return self._json(404, {"error": "not found"})
         try:
             n = min(int(self.headers.get("Content-Length") or 0), 4096)
-            name = json.loads(self.rfile.read(n) or b"{}").get("action", "")
+            body = json.loads(self.rfile.read(n) or b"{}")
+            name = body.get("action", "")
         except Exception:
-            return self._json(400, {"ok": False, "seconds": 0, "output": "bad JSON"})
+            return self._json(400, {"ok": False, "seconds": 0, "output": "bad JSON", "error": "bad JSON"})
+        if path == "/api/onboard":
+            url = str(body.get("url") or "").strip()
+            if not url or len(url) > 300 or not re.match(r"^(https?://)?[A-Za-z0-9.-]+(:\d+)?(/[\w./-]*)?$", url):
+                return self._json(400, {"error": "enter a website address, like https://example.com"})
+            return self._json(*_launch("onboard", _onboard, url))
+        if path == "/api/simulate":
+            sc = str(body.get("scenario") or "")
+            if sc not in SCENARIOS:
+                return self._json(400, {"error": f"unknown scenario (allowed: {', '.join(SCENARIOS)})"})
+            return self._json(*_launch("simulate", _simulate, sc))
         code, body = run_action(str(name))
         self._json(code, body)
 
     def log_message(self, fmt, *args):
-        if "/api/state" not in (args[0] if args else ""):
+        if not any(x in (args[0] if args else "") for x in ("/api/state", "/api/overview", "/api/job/")):
             super().log_message(fmt, *args)
 
 
 WEB_CONSOLE = Path(__file__).resolve().parents[3] / "web" / "console.html"
+
+
+def _app_page() -> str:
+    """The B2B app (src/sept25_build/agent/ui/app.html), re-read on every load."""
+    try:
+        return APP_PAGE.read_text().replace("__SUFFIX__", SUFFIX or "(stage tables)")
+    except OSError:
+        return ("<!doctype html><meta charset=utf-8><title>Night's Watch</title><body style='font-family:sans-serif;"
+                "background:#0b1020;color:#e6ecff;padding:40px'><h1>Night's Watch</h1><p>The app page is loading. "
+                "Meanwhile: <a style='color:#8ab4ff' href='/guided'>guided console</a> &middot; "
+                "<a style='color:#8ab4ff' href='/classic'>classic console</a></p>")
 
 
 def _stage_page() -> str:

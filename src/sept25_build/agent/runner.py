@@ -159,7 +159,18 @@ def main() -> None:
                         snaps = [x for x in (ingest.fetch_vendor(v) for v in (args.vendors or list(VENDORS))) if x]
                         store.add_snapshots(snaps)
                     elif hasattr(ingest, "run_once"):
-                        ingest.run_once(args.vendors)
+                        fresh = {x.snapshot_id for x in (ingest.run_once(args.vendors) or [])}
+                        # RawTree has a short read-after-write lag: wait (<= 6s) until every snapshot we
+                        # just inserted is visible, so this tick never misses it
+                        deadline = time.monotonic() + 6
+                        while fresh and time.monotonic() < deadline:
+                            try:
+                                seen = {x.snapshot_id for x in store.latest_snapshots()}
+                            except Exception:  # noqa: BLE001 - a failed read just means "not yet"
+                                seen = set()
+                            if fresh <= seen:
+                                break
+                            time.sleep(0.5)
                     else:
                         print("runner: ingest.run_once() not available yet (lane A); agent only")
                 alerts = run_tick(store, run_id=args.run_id, adaptive=args.adaptive, agent=args.agent)

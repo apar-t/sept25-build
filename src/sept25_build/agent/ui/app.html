@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night's Watch</title>
+<meta name="description" content="Know the moment a vendor's change breaks your privacy policy.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#050913; --surface:#0a1222; --surface-2:#0d1729;
+  --ink:#eef3fb; --ink-2:#9ba9c0; --ink-3:#5f6c85;
+  --line:rgba(159,216,255,.09); --line-2:rgba(159,216,255,.16);
+  --ice:#9fd8ff;
+  --green:#5fd49a; --green-bg:rgba(95,212,154,.08); --green-line:rgba(95,212,154,.28);
+  --red:#ff6767; --red-bg:rgba(255,103,103,.08); --red-line:rgba(255,103,103,.32);
+  --amber:#f2b84b; --amber-bg:rgba(242,184,75,.08); --amber-line:rgba(242,184,75,.3);
+  --sans:Geist,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r:14px;
+}
+*{box-sizing:border-box}
+html{color-scheme:dark}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh}
+a{color:var(--ice);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--ice);outline-offset:3px;border-radius:6px}
+button{font:inherit;color:inherit}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+.muted{color:var(--ink-2)}
+.faint{color:var(--ink-3)}
+.mono{font-family:var(--mono)}
+[hidden]{display:none!important}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* top bar */
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;height:72px}
+.brand{display:inline-flex;align-items:center;gap:10px;font:600 16px/1 var(--sans);letter-spacing:-.01em;color:var(--ink)}
+.brand svg{width:18px;height:18px;color:var(--ice)}
+.top-r{display:flex;align-items:center;gap:14px;font-size:13.5px;color:var(--ink-2);min-width:0}
+.top-r .host{font-family:var(--mono);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex:none}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--ice);color:#04101f;font:600 15px/1 var(--sans);padding:14px 22px;border-radius:999px;border:0;cursor:pointer;white-space:nowrap;transition:background .15s,opacity .15s}
+.btn:hover{background:#b9e3ff}
+.btn:disabled{opacity:.45;cursor:default}
+.link-btn{background:none;border:0;padding:4px 2px;color:var(--ink-2);cursor:pointer;font-size:14px;text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:4px}
+.link-btn:hover{color:var(--ink);text-decoration-color:currentColor}
+.link-btn:disabled{opacity:.4;cursor:default}
+
+/* connect */
+.hero{padding:13vh 0 80px}
+h1{font:600 38px/1.12 var(--sans);letter-spacing:-.03em;margin:0 0 14px}
+.lede{font-size:17px;color:var(--ink-2);margin:0 0 48px;max-width:560px}
+label.field{display:block;font-size:13.5px;font-weight:500;color:var(--ink-2);margin-bottom:10px}
+.input{width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:12px;color:var(--ink);font:15px/1.3 var(--mono);padding:15px 16px}
+.input:focus{outline:none;border-color:var(--ice);box-shadow:0 0 0 3px rgba(159,216,255,.15)}
+.hint{font-size:13.5px;color:var(--ink-3);margin:10px 0 28px}
+.err{color:var(--red);font-size:14px;margin:16px 0 0}
+
+/* setup */
+.page{padding:48px 0 80px}
+.url-line{font:13px/1.4 var(--mono);color:var(--ink-3);margin:0 0 14px;word-break:break-all}
+h2{font:600 26px/1.2 var(--sans);letter-spacing:-.02em;margin:0 0 8px}
+h3{font:600 17px/1.35 var(--sans);letter-spacing:-.01em;margin:0}
+
+/* progress list */
+.steps{list-style:none;margin:28px 0 0;padding:0}
+.steps li{display:grid;grid-template-columns:22px 1fr;gap:12px;padding:9px 0;align-items:start}
+.steps .ic{width:22px;height:22px;display:grid;place-items:center;margin-top:1px}
+.steps .ic svg{width:16px;height:16px}
+.steps .t{font-size:15px}
+.steps .d{font-size:13.5px;color:var(--ink-3);margin-top:1px}
+.steps li.done .ic{color:var(--green)}
+.steps li.active .t{color:var(--ink)}
+.steps li.done .t{color:var(--ink-2)}
+.steps li.failed .ic,.steps li.failed .t{color:var(--red)}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--line-2);border-top-color:var(--ice);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.fail-box{margin-top:18px;padding:14px 16px;border:1px solid var(--red-line);background:var(--red-bg);border-radius:12px;font-size:14px}
+.fail-box p{margin:0 0 12px;color:var(--ink)}
+
+/* status card */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px 24px}
+.status{display:flex;gap:16px;align-items:flex-start}
+.status .mark{width:10px;height:10px;border-radius:50%;margin-top:9px;flex:none}
+.status h2{font-size:22px;margin:0 0 4px}
+.status p{margin:0;font-size:14px;color:var(--ink-2)}
+.tone-green{border-color:var(--green-line);background:linear-gradient(var(--green-bg),var(--green-bg)),var(--surface)}
+.tone-green .mark{background:var(--green)}
+.tone-red{border-color:var(--red-line);background:linear-gradient(var(--red-bg),var(--red-bg)),var(--surface)}
+.tone-red .mark{background:var(--red)}
+.tone-amber{border-color:var(--amber-line);background:linear-gradient(var(--amber-bg),var(--amber-bg)),var(--surface)}
+.tone-amber .mark{background:var(--amber)}
+
+section.block{margin-top:56px}
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px}
+.sec-h h3{font-size:15px;color:var(--ink)}
+.sec-h span{font-size:13px;color:var(--ink-3)}
+
+/* vendor list */
+.vendors{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.vrow + .vrow{border-top:1px solid var(--line)}
+.vbtn{width:100%;display:grid;grid-template-columns:1fr auto auto 16px;gap:16px;align-items:center;background:none;border:0;padding:16px 20px;cursor:pointer;text-align:left}
+.vbtn:hover{background:var(--surface-2)}
+.vbtn:focus-visible{outline-offset:-2px;border-radius:0}
+.vname{font-weight:500;font-size:15px}
+.vcount{font-size:13.5px;color:var(--ink-3);white-space:nowrap}
+.chev{width:16px;height:16px;color:var(--ink-3);transition:transform .18s}
+.vbtn[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;padding:4px 10px;border-radius:999px;white-space:nowrap;border:1px solid}
+.pill:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.compliant{color:var(--green);border-color:var(--green-line);background:var(--green-bg)}
+.pill.not_compliant{color:var(--red);border-color:var(--red-line);background:var(--red-bg)}
+.pill.exposed{color:var(--amber);border-color:var(--amber-line);background:var(--amber-bg)}
+.vpanel{padding:4px 20px 20px 20px}
+.vpanel h4{font:500 12.5px/1 var(--sans);color:var(--ink-3);margin:14px 0 8px;letter-spacing:.02em}
+.sp{list-style:none;margin:0;padding:0}
+.sp li{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:7px 0;font-size:14px;border-top:1px solid var(--line)}
+.sp li:first-child{border-top:0}
+.sp .c{color:var(--ink-3)}
+.tag{font-size:12px;color:var(--ice);border:1px solid var(--line-2);border-radius:999px;padding:2px 8px}
+.issue{border-left:2px solid var(--red);padding:2px 0 2px 14px;margin:6px 0 12px}
+.issue.amber{border-left-color:var(--amber)}
+.issue .it{font-size:14px;font-weight:500}
+.issue .id{font-size:13.5px;color:var(--ink-2);margin:2px 0 4px}
+.issue a,.policy-link{font-size:13.5px}
+
+/* simulate */
+.sim-intro{margin:0 0 18px;color:var(--ink-2);font-size:14.5px}
+.seg{display:inline-flex;flex-wrap:wrap;gap:4px;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);margin-bottom:20px;max-width:100%}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{padding:9px 14px;border-radius:9px;font-size:14px;color:var(--ink-2);cursor:pointer}
+.seg input:checked + label{background:var(--surface-2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line-2)}
+.seg input:focus-visible + label{outline:2px solid var(--ice);outline-offset:1px}
+.seg input:disabled + label{cursor:default;opacity:.6}
+.sim-actions{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.sim-run{margin-top:8px}
+
+/* result */
+.result{margin-top:24px}
+.result h3{font-size:19px;margin-bottom:6px}
+.result .why{margin:0 0 12px;color:var(--ink-2);font-size:14.5px}
+.result .mark{width:10px;height:10px;border-radius:50%;margin-top:8px;flex:none}
+.result .head{display:flex;gap:14px}
+.result .body{min-width:0;flex:1}
+
+/* disclosures */
+details.disc{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+details.disc summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:8px;font-size:14px;color:var(--ink-2);padding:2px 0}
+details.disc summary::-webkit-details-marker{display:none}
+details.disc summary:before{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .15s;margin-right:2px}
+details.disc[open] summary:before{transform:rotate(45deg)}
+details.disc summary:hover{color:var(--ink)}
+.disc-body{padding:10px 0 4px 16px;font-size:14px}
+.disc-body ol,.disc-body ul{margin:0;padding-left:18px}
+.disc-body li{margin:4px 0}
+.disc-body .d{color:var(--ink-3);font-size:13px}
+.meta{font-size:13px;color:var(--ink-3);margin-top:10px}
+
+.footer{margin:72px 0 60px}
+.footer details.disc{border-top:1px solid var(--line)}
+.rows{margin:6px 0 0;padding:0;list-style:none}
+.rows li{display:flex;justify-content:space-between;gap:20px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.rows li:first-child{border-top:0}
+.rows li span:first-child{color:var(--ink-2)}
+.rows li span:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.rows-h{font-size:12.5px;color:var(--ink-3);margin:18px 0 2px}
+.mock-note{position:fixed;right:12px;bottom:12px;font:12px/1 var(--mono);color:var(--ink-3);border:1px solid var(--line);padding:6px 8px;border-radius:8px;background:var(--bg)}
+
+@media (max-width:560px){
+  h1{font-size:30px}
+  .hero{padding-top:8vh}
+  .vbtn{grid-template-columns:1fr auto 16px;padding:14px 16px;gap:10px}
+  .vcount{grid-column:1;grid-row:2;margin-top:-10px}
+  .vbtn .pill{grid-column:2;grid-row:1}
+  .vbtn .chev{grid-column:3;grid-row:1}
+  .vpanel{padding:4px 16px 16px}
+  .top-r .host{max-width:130px}
+  .card{padding:18px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*:before,*:after{transition:none!important;animation:none!important;scroll-behavior:auto!important}
+  .spin{border-color:var(--ice);opacity:.7}
+}
+</style>
+</head>
+<body>
+<div id="app" class="wrap"></div>
+
+<script>
+(() => {
+"use strict";
+
+// ---------- helpers ----------
+const $ = (s, el = document) => el.querySelector(s);
+const esc = v => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const safeUrl = u => { const s = String(u || ""); return /^(https?:\/\/|\/)/i.test(s) ? s : ""; };
+const fmt = n => (n == null || n === "" || isNaN(Number(n))) ? "—" : Number(n).toLocaleString("en-US");
+const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + "s")}`;
+const cleanName = s => String(s || "").replace(/\s*\(demo mirror\)\s*/i, "").trim();
+const hhmm = d => d ? d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "";
+const reduced = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const hostOf = u => { try { return new URL(u).host; } catch { return u || ""; } };
+
+const ICON = {
+  brand: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 4h3v3h2V4h4v3h2V4h3v6H5zM7 11h10v11H7z"/></svg>',
+  check: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  x: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7m0-7l-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  chev: '<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+const STATUS_LABEL = {compliant: "Compliant", not_compliant: "Not compliant", exposed: "Exposed"};
+const SCENARIOS = [
+  {id: "new_subprocessor", label: "Tinybird adds a sub-processor"},
+  {id: "training_clause", label: "Tinybird changes its AI-training clause"},
+];
+
+// ---------- mock API (?mock=1) ----------
+const params = new URLSearchParams(location.search);
+const MOCK = params.has("mock") && params.get("mock") !== "0";
+
+function makeMock() {
+  const SITE = "https://jail-happiness-boost-caused.trycloudflare.com";
+  const pol = (section) => ({doc: "Privacy Policy", section, url: SITE + "/privacy"});
+  const base = {
+    aws: ["AWS", [["Example Email Delivery","United States"],["Example Support Desk","Ireland"],["Example Payments Co.","United States"],["Example Security Monitoring","Germany"]]],
+    nimble: ["Nimble", [["Amazon Web Services, Inc.","United States"],["Example Proxy Network","Netherlands"],["Example Email Delivery","United States"],["Example Payments Co.","United Kingdom"]]],
+    tinybird: ["Tinybird", [["Amazon Web Services, Inc.","United States"],["Example Monitoring","Germany"],["Example Support Desk","Ireland"],["Example Email Delivery","France"]]],
+    liquid: ["Liquid AI", [["Amazon Web Services, Inc.","United States"],["Example GPU Cloud","Canada"],["Example Identity Provider","United States"],["Example Analytics Co.","Sweden"]]],
+    bfl: ["Black Forest Labs", [["Amazon Web Services, Inc.","United States"],["Example GPU Cloud","Germany"],["Example Content Delivery","Netherlands"],["Example Payments Co.","United Kingdom"],["Example Support Desk","Japan"]]],
+  };
+  const m = {
+    watching: params.get("watching") === "1", checks: 0, tick: 0, scenario: null, event: null,
+    jobs: {}, current: null, nextId: 1, failNext: params.get("fail") === "1",
+  };
+  const vendors = () => Object.entries(base).map(([slug, [name, sps]]) => {
+    const subprocessors = sps.map(([n, c]) => ({name: n, country: c, found_by_agent: false, evidence_url: SITE + `/vendors/${slug}/subprocessors.json`}));
+    let issues = [];
+    if (slug === "tinybird" && m.scenario === "new_subprocessor") {
+      subprocessors.push({name: "DataHarvest Ltd", country: "Singapore", found_by_agent: true, evidence_url: SITE + "/companies/dataharvest"});
+      issues = [{rule: "R1", title: "DataHarvest Ltd processes customer data in Singapore", policy: pol("International transfers"), detail: "Singapore is not one of the countries your Privacy Policy allows customer data to be processed in."}];
+    }
+    if (slug === "tinybird" && m.scenario === "training_clause") {
+      issues = [{rule: "R2", title: "Tinybird may now use customer data to train models", policy: pol("AI and model training"), detail: "Its data-processing terms now allow training on customer data, which your Privacy Policy rules out."}];
+    }
+    const status = issues.length ? "not_compliant" : "compliant";
+    return {slug, name, status, subprocessor_count: subprocessors.length, subprocessors, issues};
+  });
+  const overview = () => ({
+    site_url: SITE, suffix: "_uitest", watching: m.watching, vendors: vendors(), latest_event: m.event,
+    stats: {checks: m.checks, discarded: Math.max(0, m.checks - 2), memory_tokens: 1611, naive_tokens: 2034 + m.checks * 410,
+      proof: {long_horizon: {ratio_end: 236.9, naive_over_window_day: 56, window_tokens: 65536, matched: 5, truth: 5, missed: 0, unexpected: 0, cards_tokens_end: 1811, naive_tokens_end: 428956, days: 365},
+              crash_test: {crashes: 8, recoveries: 8, missing_ids: 0, dup_ids: 0}}},
+  });
+  const plans = {
+    onboard: [
+      ["Read your sub-processor list", "5 vendors listed on /subprocessors"],
+      ["Read AWS's sub-processors and terms", "4 sub-processors · fetched with Nimble"],
+      ["Read Nimble's sub-processors and terms", "4 sub-processors · fetched with Nimble"],
+      ["Read Tinybird's sub-processors and terms", "4 sub-processors · fetched with Nimble"],
+      ["Read Liquid AI's sub-processors and terms", "4 sub-processors · fetched with Nimble"],
+      ["Read Black Forest Labs's sub-processors and terms", "5 sub-processors · fetched with Nimble"],
+      ["Checked every vendor against your Privacy Policy", "International transfers, AI and model training, Retention"],
+      ["Saved a compact memory of each vendor", "1,542 tokens for all 5 vendors"],
+    ],
+    new_subprocessor: [
+      ["Changed Tinybird's demo mirror", "Added DataHarvest Ltd with no location listed"],
+      ["Fetched Tinybird's sub-processor list with Nimble", "1 new entry since the last check"],
+      ["Found a sub-processor with no location", "DataHarvest Ltd"],
+      ["Opened DataHarvest Ltd's website", "Data processing locations: Singapore"],
+      ["Checked it against your Privacy Policy", "International transfers: Singapore is not approved"],
+      ["Updated Tinybird's memory", "2 edits"],
+    ],
+    training_clause: [
+      ["Changed Tinybird's demo mirror", "Reworded the AI-training clause"],
+      ["Fetched Tinybird's terms with Nimble", "1 paragraph changed"],
+      ["Compared the changed paragraph with your Privacy Policy", "AI and model training"],
+      ["Updated Tinybird's memory", "1 edit"],
+    ],
+    undo: [
+      ["Restored Tinybird's demo mirror", "Back to the original list and terms"],
+      ["Fetched Tinybird again with Nimble", "Matches the approved version"],
+      ["Closed the open finding", "Tinybird complies again"],
+    ],
+  };
+  function finish(kind, scenario) {
+    m.checks += kind === "onboard" ? 5 : 1; m.tick += 1;
+    if (kind === "onboard") { m.watching = true; return; }
+    if (scenario === "undo") {
+      const was = m.scenario; m.scenario = null;
+      m.event = was ? {kind: "resolved", vendor: "Tinybird", title: "Tinybird complies again", headline: "Tinybird is compliant again",
+        why: "The change was reverted, so nothing in its list or terms conflicts with your Privacy Policy.", policy: pol(was === "training_clause" ? "AI and model training" : "International transfers"),
+        evidence_url: SITE + "/vendors/tinybird/subprocessors.json", tick: m.tick, agent: null, memory_edits: ["Closed the open finding on Tinybird"]} : null;
+      return;
+    }
+    m.scenario = scenario;
+    if (scenario === "new_subprocessor") {
+      m.event = {kind: "violation", vendor: "Tinybird", title: "Tinybird added DataHarvest Ltd (Singapore)",
+        headline: "Tinybird is no longer compliant with your Privacy Policy",
+        why: "Its new sub-processor DataHarvest Ltd processes customer data in Singapore, which is not an approved country.",
+        policy: pol("International transfers"), evidence_url: SITE + "/companies/dataharvest", tick: m.tick,
+        agent: {model: "LFM2.5-2.6B", seconds: 6.4, steps: [
+          {text: "Noticed DataHarvest Ltd had no location in Tinybird's list", detail: "The rules can't decide without a country"},
+          {text: "Fetched DataHarvest Ltd's website with Nimble", detail: SITE + "/companies/dataharvest"},
+          {text: "Read \"Data processing locations: Singapore\"", detail: "Headquarters: Singapore"},
+          {text: "Compared Singapore with your approved countries", detail: "Not approved"}]},
+        memory_edits: ["Remembered: DataHarvest Ltd processes data in Singapore", "Opened finding R1 on Tinybird"]};
+    } else {
+      m.event = {kind: "violation", vendor: "Tinybird", title: "Tinybird changed its AI-training clause",
+        headline: "Tinybird is no longer compliant with your Privacy Policy",
+        why: "Its terms now allow customer data to be used to train models, which your Privacy Policy rules out.",
+        policy: pol("AI and model training"), evidence_url: SITE + "/vendors/tinybird/dpa.md", tick: m.tick, agent: null,
+        memory_edits: ["Opened finding R2 on Tinybird"]};
+    }
+  }
+  function startJob(kind, scenario) {
+    if (m.current && m.jobs[m.current].status === "running") return {status: 409, data: {error: "busy"}};
+    const id = "job" + m.nextId++;
+    const fail = m.failNext; m.failNext = false;
+    m.jobs[id] = {id, kind, scenario, t0: Date.now(), plan: plans[kind === "onboard" ? "onboard" : scenario], fail, status: "running", done: false};
+    m.current = id;
+    return {status: 200, data: {job: id}};
+  }
+  function jobView(id) {
+    const j = m.jobs[id]; if (!j) return {status: 404, data: {error: "not found"}};
+    const per = 900, n = Math.floor((Date.now() - j.t0) / per);
+    const steps = []; let status = "running", error = null;
+    for (let i = 0; i < j.plan.length && i <= n; i++) {
+      const [text, detail] = j.plan[i];
+      if (j.fail && i === 2 && n >= 2) { steps.push({text, state: "failed", detail}); status = "failed"; error = "Nimble returned 502 for this page after 3 tries."; break; }
+      steps.push({text, state: i < n ? "done" : "active", detail: i < n ? detail : ""});
+    }
+    if (status !== "failed" && n >= j.plan.length) { status = "done"; if (!j.done) { j.done = true; finish(j.kind, j.scenario); } }
+    j.status = status;
+    return {status: 200, data: {id, kind: j.kind, status, steps, error}};
+  }
+  return async (method, path, body) => {
+    await new Promise(r => setTimeout(r, 120));
+    if (path === "/api/overview") return {status: 200, data: overview()};
+    if (path === "/api/onboard") return startJob("onboard");
+    if (path === "/api/simulate") return startJob("simulate", body.scenario);
+    const jm = path.match(/^\/api\/job\/(.+)$/); if (jm) return jobView(decodeURIComponent(jm[1]));
+    return {status: 404, data: {error: "not found"}};
+  };
+}
+const mockApi = MOCK ? makeMock() : null;
+
+async function api(method, path, body) {
+  if (mockApi) return mockApi(method, path, body);
+  const opt = {method, headers: {}};
+  if (body !== undefined) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
+  const r = await fetch(path, opt);
+  let data = null; try { data = await r.json(); } catch { data = null; }
+  return {status: r.status, data: data || {}};
+}
+
+// ---------- state ----------
+const S = {
+  screen: "loading", ov: null, ovKey: "", url: "", error: "",
+  expanded: new Set(), scenario: "new_subprocessor",
+  job: null, jobKind: null, jobScenario: null, jobSteps: [], jobError: null,
+  sim: "idle", // idle | running | failed | done
+  lastChecked: null, pollTimer: null, jobTimer: null, eventKey: "",
+};
+const app = $("#app");
+
+// ---------- rendering pieces ----------
+function topBar(right) {
+  return `<header class="top"><span class="brand">${ICON.brand}Night's Watch</span><div class="top-r">${right || ""}</div></header>`;
+}
+
+function renderStepsInto(ol, steps) {
+  // Incremental update so aria-live only announces what changed.
+  steps = steps || [];
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i]; const state = ["done","active","failed"].includes(s.state) ? s.state : "active";
+    let li = ol.children[i];
+    const sig = state + "|" + s.text + "|" + (s.detail || "");
+    if (li && li.dataset.sig === sig) continue;
+    if (!li) { li = document.createElement("li"); ol.appendChild(li); }
+    li.dataset.sig = sig; li.className = state;
+    const ic = state === "done" ? ICON.check : state === "failed" ? ICON.x : '<span class="spin" aria-hidden="true"></span>';
+    const sr = state === "done" ? "Done: " : state === "failed" ? "Failed: " : "In progress: ";
+    li.innerHTML = `<span class="ic">${ic}</span><div><div class="t"><span class="sr-only">${sr}</span>${esc(s.text)}</div>${s.detail ? `<div class="d">${esc(s.detail)}</div>` : ""}</div>`;
+  }
+  while (ol.children.length > steps.length) ol.lastElementChild.remove();
+}
+
+function keepOpen(root, fn) {
+  const open = new Set([...root.querySelectorAll("details[data-k][open]")].map(d => d.dataset.k));
+  const f = document.activeElement && root.contains(document.activeElement) ? document.activeElement.dataset.f : null;
+  fn();
+  root.querySelectorAll("details[data-k]").forEach(d => { if (open.has(d.dataset.k)) d.open = true; });
+  if (f) { const el = root.querySelector(`[data-f="${CSS.escape(f)}"]`); if (el) el.focus({preventScroll: true}); }
+}
+
+function policyLink(p) {
+  if (!p) return "";
+  const label = `${esc(p.doc || "Privacy Policy")} · ${esc(p.section || "")}`;
+  const u = safeUrl(p.url);
+  return u ? `<a class="policy-link" href="${esc(u)}" target="_blank" rel="noopener">${label}</a>` : `<span class="policy-link muted">${label}</span>`;
+}
+
+// ---------- screen 1: connect ----------
+function showConnect() {
+  stopPoll();
+  S.screen = "connect";
+  const url = S.url || (S.ov && S.ov.site_url) || "";
+  app.innerHTML = `
+    ${topBar(S.ov && S.ov.watching ? `<button class="link-btn" id="back" type="button">Back to dashboard</button>` : "")}
+    <main class="hero">
+      <h1>Know the moment a vendor's change breaks your privacy policy.</h1>
+      <p class="lede">Night's Watch reads your sub-processor list, then watches every vendor for changes that conflict with your own policies.</p>
+      <form id="connect" novalidate>
+        <label class="field" for="url">Your trust center URL</label>
+        <input class="input" id="url" name="url" type="url" inputmode="url" autocomplete="url" spellcheck="false" value="${esc(url)}" placeholder="https://trust.yourcompany.com" required>
+        <p class="hint">Demo company: Night's Watch Inc.</p>
+        <button class="btn" type="submit">Start watching</button>
+        <p class="err" id="err" role="alert">${esc(S.error)}</p>
+      </form>
+    </main>`;
+  S.error = "";
+  $("#connect").addEventListener("submit", e => {
+    e.preventDefault();
+    const v = $("#url").value.trim();
+    if (!/^https?:\/\/\S+$/i.test(v)) { $("#err").textContent = "Enter a full URL, starting with https://"; $("#url").focus(); return; }
+    startOnboard(v);
+  });
+  const back = $("#back"); if (back) back.addEventListener("click", showWatching);
+}
+
+// ---------- screen 2: setting up ----------
+function showSetup(url) {
+  stopPoll();
+  S.screen = "setup";
+  app.innerHTML = `
+    ${topBar("")}
+    <main class="page">
+      <p class="url-line">${esc(url)}</p>
+      <h2 id="setup-h">Setting up</h2>
+      <p class="muted" id="setup-sub">Reading your sub-processors and each vendor's terms. This takes about a minute.</p>
+      <ol class="steps" id="steps" aria-live="polite" aria-labelledby="setup-h"></ol>
+      <div class="fail-box" id="fail" hidden><p id="fail-msg"></p><button class="btn" type="button" id="retry">Try again</button> <button class="link-btn" type="button" id="change" style="margin-left:14px">Use a different URL</button></div>
+    </main>`;
+  $("#retry").addEventListener("click", () => startOnboard(url));
+  $("#change").addEventListener("click", () => { S.url = url; showConnect(); });
+}
+
+async function startOnboard(url) {
+  S.url = url;
+  showSetup(url);
+  const ol = $("#steps");
+  renderStepsInto(ol, [{text: "Connecting to Night's Watch", state: "active", detail: ""}]);
+  let r;
+  try { r = await api("POST", "/api/onboard", {url}); }
+  catch { return setupFailed("Can't reach the Night's Watch service. Check that it's running."); }
+  if (r.status === 409) return setupFailed("Night's Watch is finishing another check. Try again in a moment.");
+  if (r.status >= 400 || !r.data.job) return setupFailed(r.data.error || `The request failed (${r.status}).`);
+  renderStepsInto(ol, []);
+  pollJob(r.data.job, job => {
+    if (S.screen !== "setup") return;
+    renderStepsInto($("#steps"), job.steps);
+  }, async job => {
+    if (job.status === "failed") return setupFailed(job.error || "A step failed.");
+    S.lastChecked = new Date();
+    await refreshOverview();
+    showWatching();
+  });
+}
+
+function setupFailed(msg) {
+  if (S.screen !== "setup") return;
+  const ol = $("#steps");
+  if (!ol.querySelector("li.failed")) {
+    const act = ol.querySelector("li.active");
+    if (act) { act.className = "failed"; act.querySelector(".ic").innerHTML = ICON.x; act.dataset.sig = ""; const sr = act.querySelector(".sr-only"); if (sr) sr.textContent = "Failed: "; }
+  }
+  $("#setup-h").textContent = "Setup stopped";
+  $("#setup-sub").textContent = "Nothing was saved from this attempt.";
+  $("#fail-msg").textContent = msg;
+  $("#fail").hidden = false;
+  $("#retry").focus();
+}
+
+// ---------- job polling ----------
+function pollJob(id, onUpdate, onEnd) {
+  clearTimeout(S.jobTimer);
+  S.job = id;
+  const tick = async () => {
+    let r;
+    try { r = await api("GET", "/api/job/" + encodeURIComponent(id)); }
+    catch { S.jobTimer = setTimeout(tick, 1200); return; }
+    if (S.job !== id) return;
+    if (r.status >= 400) { S.job = null; onEnd({status: "failed", error: r.data.error || `Lost track of the job (${r.status}).`, steps: []}); return; }
+    const job = r.data;
+    onUpdate(job);
+    if (job.status === "running") { S.jobTimer = setTimeout(tick, 600); return; }
+    S.job = null;
+    onEnd(job);
+  };
+  tick();
+}
+
+// ---------- overview ----------
+async function refreshOverview() {
+  const r = await api("GET", "/api/overview");
+  if (r.status >= 400) throw new Error(r.data.error || "overview " + r.status);
+  const key = JSON.stringify(r.data);
+  const changed = key !== S.ovKey;
+  S.ov = r.data; S.ovKey = key;
+  return changed;
+}
+
+function startPoll() {
+  stopPoll();
+  const loop = async () => {
+    if (S.screen !== "watching") return;
+    if (!S.job) {
+      try { if (await refreshOverview()) renderWatchingParts(); } catch { /* keep last view */ }
+    }
+    S.pollTimer = setTimeout(loop, 3000);
+  };
+  S.pollTimer = setTimeout(loop, 3000);
+}
+function stopPoll() { clearTimeout(S.pollTimer); S.pollTimer = null; }
+
+// ---------- screen 3: watching ----------
+function showWatching() {
+  S.screen = "watching";
+  const site = (S.ov && S.ov.site_url) || S.url;
+  if (!S.lastChecked) S.lastChecked = new Date();
+  app.innerHTML = `
+    ${topBar(`<span class="live-dot" aria-hidden="true"></span><span class="host" title="${esc(site)}">Watching ${esc(hostOf(site))}</span><button class="link-btn" type="button" id="reconnect">Reconnect</button>`)}
+    <main class="page" style="padding-top:28px">
+      <div id="status" aria-live="polite"></div>
+
+      <section class="block" aria-labelledby="vend-h">
+        <div class="sec-h"><h3 id="vend-h">Vendors</h3><span id="vend-sub"></span></div>
+        <div class="vendors" id="vendors"></div>
+      </section>
+
+      <section class="block" aria-labelledby="sim-h">
+        <div class="sec-h"><h3 id="sim-h">Simulate a vendor change</h3></div>
+        <p class="sim-intro">Change a vendor's demo mirror the way a real vendor might, then watch Night's Watch catch it.</p>
+        <div class="seg" role="radiogroup" aria-label="Change to simulate">
+          ${SCENARIOS.map(s => `<input type="radio" name="scn" id="scn-${s.id}" value="${s.id}" ${S.scenario === s.id ? "checked" : ""}><label for="scn-${s.id}">${esc(s.label)}</label>`).join("")}
+        </div>
+        <div class="sim-actions">
+          <button class="btn" type="button" id="run">Run simulation</button>
+          <button class="link-btn" type="button" id="undo">Undo changes</button>
+        </div>
+        <div id="sim-run" class="sim-run" hidden>
+          <ol class="steps" id="sim-steps" aria-live="polite" aria-label="Simulation progress"></ol>
+          <div class="fail-box" id="sim-fail" hidden><p id="sim-fail-msg"></p><button class="btn" type="button" id="sim-retry">Try again</button></div>
+        </div>
+        <div id="result" aria-live="polite"></div>
+      </section>
+
+      <div class="footer" id="fast"></div>
+    </main>`;
+  $("#reconnect").addEventListener("click", () => { S.url = site; showConnect(); });
+  app.querySelectorAll('input[name="scn"]').forEach(i => i.addEventListener("change", () => { S.scenario = i.value; }));
+  $("#run").addEventListener("click", () => simulate(S.scenario));
+  $("#undo").addEventListener("click", () => simulate("undo"));
+  $("#sim-retry").addEventListener("click", () => simulate(S.jobScenario || S.scenario));
+  $("#vendors").addEventListener("click", e => {
+    const b = e.target.closest(".vbtn"); if (!b) return;
+    const slug = b.dataset.slug;
+    if (S.expanded.has(slug)) S.expanded.delete(slug); else S.expanded.add(slug);
+    renderVendors();
+  });
+  S.eventKey = "";
+  renderWatchingParts();
+  setSimBusy(!!S.job);
+  startPoll();
+}
+
+function renderWatchingParts() {
+  if (S.screen !== "watching" || !S.ov) return;
+  renderStatus(); renderVendors(); renderResult(); renderFast();
+}
+
+function renderStatus() {
+  const vs = S.ov.vendors || [];
+  const red = vs.filter(v => v.status === "not_compliant");
+  const amber = vs.filter(v => v.status === "exposed");
+  let tone = "green", title;
+  if (red.length) {
+    tone = "red";
+    title = `${plural(red.length, "vendor")} no longer ${red.length === 1 ? "complies" : "comply"} with your Privacy Policy`;
+  } else if (amber.length) {
+    tone = "amber";
+    title = `${plural(amber.length, "vendor")} ${amber.length === 1 ? "relies" : "rely"} on a vendor that doesn't comply`;
+  } else {
+    title = vs.length === 1 ? "Your vendor complies with your Privacy Policy" : `All ${vs.length} vendors comply with your Privacy Policy`;
+  }
+  const bits = [];
+  if (red.length) bits.push(red.map(v => esc(cleanName(v.name))).join(", "));
+  if (red.length && amber.length) bits.push(`${plural(amber.length, "vendor")} exposed through ${red.length === 1 ? "it" : "them"}`);
+  const checks = S.ov.stats && S.ov.stats.checks;
+  if (checks != null) bits.push(`${plural(Number(checks), "check")} run`);
+  const lc = S.ov.checked_at ? new Date(S.ov.checked_at) : S.lastChecked;
+  if (lc && !isNaN(lc)) bits.push(`last checked ${hhmm(lc)}`);
+  const html = `<div class="card status tone-${tone}"><span class="mark" aria-hidden="true"></span><div><h2>${esc(title)}</h2><p>${bits.join(" · ")}</p></div></div>`;
+  const el = $("#status");
+  if (el.dataset.sig !== html) { el.innerHTML = html; el.dataset.sig = html; }
+  $("#vend-sub").textContent = vs.length ? "Select a vendor to see its sub-processors" : "";
+}
+
+function renderVendors() {
+  const root = $("#vendors"); if (!root) return;
+  const vs = S.ov.vendors || [];
+  keepOpen(root, () => {
+    root.innerHTML = vs.length ? vs.map(v => {
+      const open = S.expanded.has(v.slug);
+      const st = STATUS_LABEL[v.status] ? v.status : "compliant";
+      const n = v.subprocessor_count != null ? v.subprocessor_count : (v.subprocessors || []).length;
+      const pid = "vp-" + esc(v.slug);
+      return `<div class="vrow">
+        <button class="vbtn" type="button" data-slug="${esc(v.slug)}" data-f="v-${esc(v.slug)}" aria-expanded="${open}" aria-controls="${pid}">
+          <span class="vname">${esc(cleanName(v.name))}</span>
+          <span class="vcount">${plural(Number(n) || 0, "sub-processor")}</span>
+          <span class="pill ${st}">${STATUS_LABEL[st]}</span>
+          ${ICON.chev}
+        </button>
+        <div class="vpanel" id="${pid}" ${open ? "" : "hidden"}>${open ? vendorPanel(v) : ""}</div>
+      </div>`;
+    }).join("") : `<div class="vpanel muted" style="padding:18px 20px">No vendors yet.</div>`;
+  });
+}
+
+function vendorPanel(v) {
+  let h = "";
+  const issues = v.issues || [];
+  if (issues.length) {
+    h += `<h4>What conflicts with your policies</h4>`;
+    h += issues.map(i => `<div class="issue${v.status === "exposed" ? " amber" : ""}">
+      <div class="it">${i.rule ? esc(i.rule) + " · " : ""}${esc(i.title)}</div>
+      ${i.detail ? `<div class="id">${esc(i.detail)}</div>` : ""}
+      ${policyLink(i.policy)}</div>`).join("");
+  } else if (v.status === "exposed") {
+    h += `<h4>Why it's exposed</h4><div class="issue amber"><div class="id">It relies on a vendor that no longer complies with your Privacy Policy.</div></div>`;
+  }
+  const sps = v.subprocessors || [];
+  h += `<h4>Sub-processors</h4>`;
+  h += sps.length ? `<ul class="sp">${sps.map(s => {
+    const ev = safeUrl(s.evidence_url);
+    return `<li><span>${esc(s.name)}</span><span class="c">· ${s.country ? esc(s.country) : "location not listed"}</span>${s.found_by_agent ? `<span class="tag">found by Night's Watch</span>${ev ? `<a href="${esc(ev)}" target="_blank" rel="noopener">evidence</a>` : ""}` : ""}</li>`;
+  }).join("")}</ul>` : `<p class="muted" style="font-size:14px;margin:0">This vendor doesn't publish a sub-processor list.</p>`;
+  return h;
+}
+
+function renderResult() {
+  const root = $("#result"); if (!root) return;
+  if (S.sim === "running") return;
+  const ev = S.ov.latest_event;
+  const key = ev ? JSON.stringify(ev) : (S.sim === "done" ? "none-after-sim" : "");
+  if (key === S.eventKey) return;
+  S.eventKey = key;
+  keepOpen(root, () => {
+    if (!ev) {
+      root.innerHTML = S.sim === "done" ? `<div class="card result"><div class="head"><span class="mark" style="background:var(--ink-3)" aria-hidden="true"></span><div class="body"><h3>No policy conflict found</h3><p class="why">Night's Watch checked the change and nothing in it conflicts with your Privacy Policy.</p></div></div></div>` : "";
+      return;
+    }
+    const vendor = cleanName(ev.vendor);
+    const bad = ev.kind === "violation";
+    const headline = ev.headline || (bad ? `${vendor} is no longer compliant with your Privacy Policy` : `${vendor} is compliant again`);
+    const evUrl = safeUrl(ev.evidence_url);
+    const ag = ev.agent;
+    let how = "";
+    if (ag && (ag.steps || []).length) {
+      how += `<ol>${ag.steps.map(s => `<li>${esc(s.text)}${s.detail ? `<div class="d">${esc(s.detail)}</div>` : ""}</li>`).join("")}</ol>`;
+    } else if (bad) {
+      how += `<p style="margin:0">Found by comparing ${esc(vendor)}'s latest page with what Night's Watch remembered from the last check.</p>`;
+    }
+    const meta = [];
+    if (ag && ag.model) meta.push(`Model: ${esc(ag.model)}`);
+    if (ag && ag.seconds != null) meta.push(`${Number(ag.seconds).toFixed(1)} s`);
+    if (ev.tick != null) meta.push(`check ${esc(ev.tick)}`);
+    if (evUrl) meta.push(`<a href="${esc(evUrl)}" target="_blank" rel="noopener">View evidence</a>`);
+    if (meta.length) how += `<div class="meta">${meta.join(" · ")}</div>`;
+    const mem = ev.memory_edits || [];
+    root.innerHTML = `<div class="card result tone-${bad ? "red" : "green"}">
+      <div class="head"><span class="mark" aria-hidden="true"></span><div class="body">
+        <h3>${esc(headline)}</h3>
+        ${ev.why ? `<p class="why">${esc(ev.why)}</p>` : ""}
+        ${bad ? policyLink(ev.policy) : ""}
+        ${how ? `<details class="disc" data-k="how"><summary>How Night's Watch found this</summary><div class="disc-body">${how}</div></details>` : ""}
+        ${mem.length ? `<details class="disc" data-k="mem"><summary>What it remembered</summary><div class="disc-body"><ul>${mem.map(m => `<li>${esc(m)}</li>`).join("")}</ul></div></details>` : ""}
+      </div></div></div>`;
+  });
+}
+
+function renderFast() {
+  const root = $("#fast"); if (!root) return;
+  const st = S.ov.stats || {};
+  const p = st.proof;
+  let rows = `<li><span>Checks run</span><span>${fmt(st.checks)}</span></li>
+    <li><span>Changes set aside without calling a model</span><span>${fmt(st.discarded)}</span></li>
+    <li><span>Night's Watch working memory</span><span>${fmt(st.memory_tokens)} tokens</span></li>
+    <li><span>Re-reading the full history instead (computed, not run)</span><span>${fmt(st.naive_tokens)} tokens</span></li>`;
+  let proof = "";
+  if (p && typeof p === "object") {
+    const lh = p.long_horizon || p;
+    const ct = p.crash_test || p;
+    const pr = [];
+    const ratio = lh.ratio_end ?? lh.ratio;
+    const days = lh.days || 365;
+    if (lh.cards_tokens_end != null && lh.naive_tokens_end != null)
+      pr.push([`Memory after ${fmt(days)} days vs full history`, `${fmt(lh.cards_tokens_end)} vs ${fmt(lh.naive_tokens_end)} tokens${ratio ? ` (${Number(ratio).toFixed(0)}x smaller)` : ""}`]);
+    else if (ratio != null) pr.push([`Smaller than re-reading history after ${fmt(days)} days`, `${Number(ratio).toFixed(0)}x`]);
+    const day = lh.naive_over_window_day ?? lh.naive_passes_day ?? lh.naive_65k_day;
+    if (day != null) pr.push([`Full history passes the ${fmt(lh.window_tokens || 65536)}-token model limit`, `day ${fmt(day)}`]);
+    if (lh.matched != null) pr.push(["Planted policy breaks caught", `${fmt(lh.matched)} of ${fmt(lh.truth ?? lh.matched)}${lh.unexpected != null ? `, ${fmt(lh.unexpected)} false alarms` : ""}`]);
+    if (ct.crashes != null || ct.recoveries != null) pr.push(["Recovered from crashes", `${fmt(ct.recoveries)} of ${fmt(ct.crashes)}${ct.missing_ids === 0 && ct.dup_ids === 0 ? ", nothing lost or duplicated" : ""}`]);
+    if (pr.length) proof = `<p class="rows-h">Over a simulated year</p><ul class="rows">${pr.map(([a, b]) => `<li><span>${esc(a)}</span><span>${esc(b)}</span></li>`).join("")}</ul>`;
+  }
+  const html = `<details class="disc" data-k="fast"><summary>Why this stays fast for months</summary><div class="disc-body">
+    <p class="muted" style="margin:0 0 8px">Night's Watch keeps a short memory of each vendor instead of re-reading its whole history on every check, so each check costs the same on day 300 as on day 1.</p>
+    <ul class="rows">${rows}</ul>${proof}</div></details>`;
+  if (root.dataset.sig === html) return;
+  keepOpen(root, () => { root.innerHTML = html; });
+  root.dataset.sig = html;
+}
+
+// ---------- simulation ----------
+function setSimBusy(busy) {
+  ["#run", "#undo"].forEach(s => { const b = $(s); if (b) b.disabled = busy; });
+  app.querySelectorAll('input[name="scn"]').forEach(i => i.disabled = busy);
+  const run = $("#run"); if (run) run.textContent = busy ? "Running…" : "Run simulation";
+}
+
+async function simulate(scenario) {
+  if (S.job) return;
+  S.sim = "running"; S.jobScenario = scenario;
+  setSimBusy(true);
+  $("#result").innerHTML = ""; S.eventKey = "";
+  $("#sim-run").hidden = false; $("#sim-fail").hidden = true;
+  const ol = $("#sim-steps"); ol.innerHTML = "";
+  renderStepsInto(ol, [{text: scenario === "undo" ? "Undoing changes" : "Starting the simulation", state: "active"}]);
+  let r;
+  try { r = await api("POST", "/api/simulate", {scenario}); }
+  catch { return simFailed("Can't reach the Night's Watch service."); }
+  if (r.status === 409) return simFailed("Night's Watch is finishing another check. Try again in a moment.");
+  if (r.status >= 400 || !r.data.job) return simFailed(r.data.error || `The request failed (${r.status}).`);
+  ol.innerHTML = "";
+  pollJob(r.data.job, job => {
+    if (S.screen === "watching") renderStepsInto($("#sim-steps"), job.steps);
+  }, async job => {
+    if (S.screen !== "watching") { S.sim = "idle"; return; }
+    if (job.status === "failed") return simFailed(job.error || "A step failed.");
+    S.lastChecked = new Date();
+    try { await refreshOverview(); } catch {}
+    S.sim = "done";
+    $("#sim-run").hidden = true;
+    setSimBusy(false);
+    renderWatchingParts();
+    const res = $("#result");
+    if (res && res.firstElementChild) res.scrollIntoView({block: "nearest", behavior: reduced() ? "auto" : "smooth"});
+  });
+}
+
+function simFailed(msg) {
+  S.sim = "failed"; S.job = null;
+  const ol = $("#sim-steps");
+  if (ol && !ol.querySelector("li.failed")) {
+    const act = ol.querySelector("li.active");
+    if (act) { act.className = "failed"; act.querySelector(".ic").innerHTML = ICON.x; act.dataset.sig = ""; }
+  }
+  $("#sim-fail-msg").textContent = msg;
+  $("#sim-fail").hidden = false;
+  setSimBusy(false);
+  $("#sim-retry").focus();
+}
+
+// ---------- boot ----------
+async function boot() {
+  if (MOCK) { const n = document.createElement("div"); n.className = "mock-note"; n.textContent = "mock data"; document.body.appendChild(n); }
+  app.innerHTML = topBar("") + `<main class="hero"><p class="muted">Loading…</p></main>`;
+  try { await refreshOverview(); }
+  catch { S.error = "Can't reach the Night's Watch service yet. You can still try to connect."; showConnect(); return; }
+  S.url = S.ov.site_url || "";
+  if (S.ov.watching) showWatching(); else showConnect();
+}
+boot();
+})();
+</script>
+</body>
+</html>
