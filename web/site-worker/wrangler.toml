@@ -1,0 +1,10 @@
+name = "nights-watch-site"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+routes = [
+  { pattern = "nightswatch.app", custom_domain = true },
+  { pattern = "www.nightswatch.app", custom_domain = true },
+]
+
+[vars]
+CANONICAL_HOST = "nightswatch.app"
