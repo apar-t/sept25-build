@@ -262,7 +262,7 @@ def warm(base: str) -> None:
 def cue_card(title: str, lease: dict | None) -> None:
     inj = "uv run python site/inject.py"
     tick = (f"runner {lease['holder']} is LIVE: wait for its next cycle (~30s)" if lease and lease.get("live")
-            else "uv run python -m sept25_build.agent.runner --fetch --agent --cycles 1")
+            else "uv run python -m sept25_build.agent.runner --fetch --vendors tinybird --agent --narrate --cycles 1")
     name = title.split(" added ")[0].split(" re-added ")[0]
     steps = [
         (f"{inj} status", "all five vendors green (no tick needed)"),
