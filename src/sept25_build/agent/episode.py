@@ -85,7 +85,7 @@ def _nimble():
     if not key:
         return None
     from nimble_python import Nimble
-    return Nimble(api_key=key)
+    return Nimble(api_key=key, timeout=20, max_retries=0)  # a stuck fetch falls back instead of stalling the demo
 
 
 def _html_to_text(html: str) -> str:
@@ -110,7 +110,7 @@ def fetch_page(url: str) -> str:
     local = re.match(r"https?://(localhost|127\.0\.0\.1)", url)
     if n is not None and not local:
         try:
-            md = n.extract.run(url=url, formats=["markdown"]).data.markdown or ""
+            md = n.extract.run(url=url, formats=["markdown"], render=False).data.markdown or ""  # static pages: ~1s
             return f"[via Nimble] {md[:RESULT_CHARS]}"
         except Exception as e:
             fallback = f"Nimble failed ({type(e).__name__}); "
