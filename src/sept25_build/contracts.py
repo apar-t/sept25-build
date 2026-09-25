@@ -13,6 +13,7 @@ Flow of one tick:
 
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -21,6 +22,9 @@ from pydantic import BaseModel, Field
 COMPANY = "Night's Watch Inc."
 
 # RawTree tables. The database is shared with other teams, so everything is prefixed nw_.
+# NW_TABLE_SUFFIX=_rehearsal runs the full live pipeline against separate tables, so a rehearsal
+# never leaves memory (e.g. "DataHarvest was seen before") in the tables the stage demo uses.
+_SUFFIX = os.environ.get("NW_TABLE_SUFFIX", "")
 TABLES = {
     "snapshots": "nw_snapshots",
     "state_cards": "nw_state_cards",
@@ -31,6 +35,7 @@ TABLES = {
     "episodes": "nw_episodes",       # the agent's reasoning traces: tools called, findings, commit
     "commits": "nw_commits",         # one row per committed batch of state cards (crash-safe commit point)
 }
+TABLES = {k: v + _SUFFIX for k, v in TABLES.items()}
 
 # The company's data policy. The agent checks every vendor against these rules.
 # APPROVED_COUNTRIES is the company's own approved list, not a legal adequacy list.

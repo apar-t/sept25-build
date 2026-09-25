@@ -327,6 +327,9 @@ def _apply_commit(card: StateCard, c: dict, tick: int, ep: Episode, seen: list[t
                 rejected.append({"subprocessor": name, "country": country,
                                  "reason": "not an open question" if k not in unknown else "no country"})
             continue
+        known = card.investigations.get(k, {})
+        if known.get("country", "").lower() == country.lower():
+            continue  # restating a location it already verified earlier: nothing to change, nothing to reject
         where = _ground(country, str(loc.get("evidence_url", "")), seen)
         if not where:
             rejected.append({"subprocessor": name, "country": country,

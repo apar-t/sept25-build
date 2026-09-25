@@ -65,6 +65,22 @@ The agent (lane B) reads `nw_snapshots` and nothing else from A. To keep the dem
 8. **One level only: don't crawl sub-processors' own sub-processor pages.** Deeper links come from name matching on B's side ("link, don't crawl"): a sub-processor whose name matches `contracts.VENDOR_ALIASES` (e.g. "Amazon Web Services, Inc." in Tinybird's list) becomes an edge to the AWS node we already watch. Each company is one node and traversal keeps a visited set, so cycles (Tinybird → AWS → Tinybird) can't loop. If you see a sponsor listed under a name the aliases miss, add it to `VENDOR_ALIASES` and say so in the commit.
 9. **Handshake:** once one real snapshot is in `nw_snapshots`, B runs `uv run scripts/tick.py --no-fetch`.
 
+## Notes for lane C (dashboard), from B
+Everything the dashboard needs is already in RawTree. **Build against the `_e2e` tables** (a full live end-to-end run: baseline, noise, DataHarvest found by the agent, training clause, reset), then drop the suffix for the stage demo. Same columns in both.
+
+| Table | One row per | Use it for |
+|---|---|---|
+| `nw_state_cards` | vendor per commit | **Current state = latest `tick` per `vendor`**, only rows whose `batch` is in `nw_commits.batch` (uncommitted rows are crash leftovers). Columns: `vendor`, `display_name`, `status` (green/red), `open_findings_json`, `subprocessors_json` (name/purpose/country/url), `depends_on_json` + `exposed_via_json` (graph edges; amber = green but exposed to a red upstream), `card_json` (full card incl. `notes`, `counters`, `investigations`) |
+| `nw_alerts` | alert | Alert feed: `tick`, `kind` (violation/resolved), `rule` (R1-R3), `title`, `before`, `after`, `explanation` (includes "found by the agent" / "confirmed by gpt-5.6-sol" / agent memo), `evidence_url` |
+| `nw_ticks` | vendor per tick per agent | **The chart**: `agent='nights_watch'` → `card_tokens` (working memory, flat); `agent='naive'` → `input_tokens` (label it "computed, not run"). Also `llm_calls`, `review_calls`, `latency_ms`, `material` |
+| `nw_memory_ops` | memory edit | "Agent editing its own memory" feed: `op` (remember/forget/set/open_finding/close_finding/compact/keep_on_fetch_gap), `field`, `before`, `after`, `why` |
+| `nw_episodes` | agent episode | "Agent investigating..." panel: `trigger`, `model`, `steps` (JSON: tool, args, result), `outcome`, `committed` (JSON: locations, rejected, memo), `latency_ms` |
+| `nw_snapshots` | fetch | Raw evidence behind an alert (`evidence_snapshot_id`) |
+
+RawTree gotchas: columns are `Dynamic`, so wrap them in `toString()` and **sort in your code, not with SQL `ORDER BY`**. Queries are read-only. Example: `SELECT toString(vendor) v, toString(tick) t, toString(status) s, toString(batch) b, toString(depends_on_json) d FROM nw_state_cards_e2e` then keep the max `t` per `v` among committed `b`.
+Pitch numbers: `uv run python -m sept25_build.agent.proof` writes `out/proof.json` (365-day tokens, day naive passes 65k, 5/5 alerts, ablation, crash test).
+If the dashboard isn't ready, the stage fallback is the narrated terminal: `runner --fetch --vendors tinybird --agent --narrate --cycles 1`.
+
 ## Build rules
 - One tick = ingest (A) → agent (B) → dashboard reads (C). `uv run scripts/tick.py` runs a full tick; the demo triggers it manually, never on a timer.
 - The demo mirror is the **only** page we inject into. It must always display as "(demo mirror)"; never imply a real vendor changed its terms.

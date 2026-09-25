@@ -427,7 +427,8 @@ def memory_ops(old: StateCard | None, new: StateCard, tick: int, run_id: str) ->
     subs_new = {policy.sub_key(sp): sp for sp in new.subprocessors}
     ops += [op("remember", "subprocessor", after=f"{sp.name} ({policy.location(sp, new) or 'location not listed'})")
             for k, sp in subs_new.items() if k not in subs_old]
-    ops += [op("forget", "subprocessor", before=f"{sp.name} ({sp.country})", why="no longer listed; kept in ledger")
+    ops += [op("forget", "subprocessor", before=f"{sp.name} ({policy.location(sp, old) or 'location not listed'})",
+               why="no longer listed; kept in ledger")
             for k, sp in subs_old.items() if k not in subs_new]
     ops += [op("remember", "sentence", after=v["text"], why=f"{v['kind']} verdict by {v['by']}")
             for k, v in new.sentence_verdicts.items() if k not in old.sentence_verdicts]
