@@ -25,7 +25,8 @@ Rules:
   age -R .age-recipients -a -o .env.age .env
   ```
 - The keys are shared and full-access. The RawTree key can read and write the whole account. BFL spends real credits, about $0.03 per image, so don't generate images in loops.
-- Nimble and AWS Bedrock keys are not in `.env` yet. Ask the user to get them; don't create accounts.
+- The Nimble key is in `.env`. AWS Bedrock keys are not yet; ask the user to get them, and don't create accounts.
+- Nimble `extract.run` on a `.json`/`.md` URL: use `formats=["html"]` (returns the file untouched). `formats=["markdown"]` breaks the JSON and merges paragraphs. A 404/502 still comes back as `status: success`, so check `status_code`.
 
 ## Plan vs what's set up
 - **"Tinybird" in the plan means RawTree** (rawtree.com, a Tinybird product). We have a RawTree key, not a Tinybird Forward token, so don't run `tb login`.
@@ -38,7 +39,7 @@ Each person runs their own coding agent. **Agents edit only their own lane.** If
 
 | Lane | Owner | Owns | Must provide to others |
 |---|---|---|---|
-| **A: ingest** | _claim: put your GitHub handle here_ | `src/sept25_build/ingest/`, `scripts/inject.py`, the demo mirror page | `ingest.run_once() -> list[Snapshot]`, written to `nw_snapshots` |
+| **A: ingest** | rohitenterprise | `src/sept25_build/ingest/` (reads the `site/` mirrors through Nimble) | `ingest.run_once() -> list[Snapshot]`, written to `nw_snapshots` |
 | **B: agent** | apar-t | `src/sept25_build/agent/`, `scripts/tick.py` | `agent.run_tick()`: writes `nw_state_cards`, `nw_alerts`, `nw_ticks` |
 | **B: demo target site** | apar-t | `site/`: the monitored company's trust center (privacy, terms, sub-processors) + a "demo mirror" of each vendor's sub-processor list and DPA, served with `Cache-Control: no-store` through a cloudflared tunnel; `site/inject.py` injects violations | the URLs lane A fetches; the demo's injection commands |
 | **C: data + web** | _claim: put your GitHub handle here_ | `web/`, `src/sept25_build/rawtree.py`, RawTree queries/endpoints, pitch + backup video | the dashboard |

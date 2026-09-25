@@ -41,3 +41,11 @@ uv run scripts/smoke_liquid.py          # tool call against the local LFM
 uv run scripts/smoke_bfl.py             # BFL key and credit balance (free)
 uv run scripts/smoke_bfl.py --generate  # one FLUX image, about $0.03
 ```
+
+### Eyes (lane A): read the demo site into RawTree
+Needs `brew install cloudflared`. A fresh tunnel can take about a minute to become reachable from Nimble; until then, reads fall back to a direct fetch, and the output says so.
+```bash
+bash site/tunnel.sh                              # demo site + public link (keep it running)
+uv run python -m sept25_build.ingest             # all 5 vendors -> nw_snapshots
+uv run python -m sept25_build.ingest tinybird    # just the vendor you injected into (about 1.5s)
+```
