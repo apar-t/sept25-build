@@ -72,8 +72,10 @@ def build(s: str) -> str:
     s = s[:a] + MOCK.replace("__SITE__", SITE) + s[b:]
     rep('n.textContent = "mock data";',
         'n.innerHTML = \'Replay of a real recorded run · <a href="guided.html" style="color:inherit">detailed view</a>\';')
-    rep('<span class="brand">${ICON.brand}Night\'s Watch</span>',
-        '<a class="brand" href="./">${ICON.brand}Night\'s Watch</a>')
+    # "About" is the landing page, which on nightswatch.app sits next to this file
+    rep('<a class="about" href="/about/"', '<a class="about" href="./"')
+    # a company the visitor names needs the live service (it opens that company's site): not in a recording
+    rep('  {id: "custom", label: "Tinybird adds a company you choose"},\n', '')
     rep('<p class="hint">Demo company: Night\'s Watch Inc.</p>',
         '<p class="hint">Demo company: Night\'s Watch Inc. This page replays one real run on demo mirrors of its vendors\' pages.</p>')
     assert "Example Email Delivery" not in s and "fetch(path" in s

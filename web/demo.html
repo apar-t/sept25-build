@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Night's Watch</title>
 <meta name="description" content="Know the moment a vendor's change breaks your privacy policy.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23050913'/%3E%3Cpath d='M10 26V12h2V9h2v3h4V9h2v3h2v14z' fill='%239fd8ff'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
@@ -37,7 +38,11 @@ button{font:inherit;color:inherit}
 
 /* top bar */
 .top{display:flex;align-items:center;justify-content:space-between;gap:16px;height:72px}
-.brand{display:inline-flex;align-items:center;gap:10px;font:600 16px/1 var(--sans);letter-spacing:-.01em;color:var(--ink)}
+.brand{display:inline-flex;align-items:center;gap:10px;font:600 16px/1 var(--sans);letter-spacing:-.01em;color:var(--ink);text-decoration:none;border-radius:6px}
+.brand:hover{color:var(--ice)}
+.brand:focus-visible{outline:2px solid var(--ice);outline-offset:4px}
+.top-r{display:flex;align-items:center;gap:16px}
+.about{color:var(--ink-3);font-size:14px;text-decoration:none}.about:hover{color:var(--ink)}
 .brand svg{width:18px;height:18px;color:var(--ice)}
 .top-r{display:flex;align-items:center;gap:14px;font-size:13.5px;color:var(--ink-2);min-width:0}
 .top-r .host{font-family:var(--mono);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
@@ -137,6 +142,7 @@ section.block{margin-top:56px}
 .seg input:checked + label{background:var(--surface-2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line-2)}
 .seg input:focus-visible + label{outline:2px solid var(--ice);outline-offset:1px}
 .seg input:disabled + label{cursor:default;opacity:.6}
+.custom{max-width:520px;margin:0 0 20px}.custom .input{margin-bottom:14px}.custom em{font-style:normal;color:var(--ink-3);font-weight:400}
 .sim-actions{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
 .sim-run{margin-top:8px}
 
@@ -290,7 +296,7 @@ const app = $("#app");
 
 // ---------- rendering pieces ----------
 function topBar(right) {
-  return `<header class="top"><a class="brand" href="./">${ICON.brand}Night's Watch</a><div class="top-r">${right || ""}</div></header>`;
+  return `<header class="top"><a class="brand" href="/" id="home" aria-label="Night's Watch home">${ICON.brand}Night's Watch</a><div class="top-r">${right || ""}<a class="about" href="./" target="_blank" rel="noopener">About</a></div></header>`;
 }
 
 function renderStepsInto(ol, steps) {
@@ -329,6 +335,7 @@ function policyLink(p) {
 function showConnect() {
   stopPoll();
   S.screen = "connect";
+  document.title = "Night's Watch";
   const url = S.url || (S.ov && S.ov.site_url) || "";
   app.innerHTML = `
     ${topBar(S.ov && S.ov.watching ? `<button class="link-btn" id="back" type="button">Back to dashboard</button>` : "")}
@@ -350,7 +357,7 @@ function showConnect() {
     if (!/^https?:\/\/\S+$/i.test(v)) { $("#err").textContent = "Enter a full URL, starting with https://"; $("#url").focus(); return; }
     startOnboard(v);
   });
-  const back = $("#back"); if (back) back.addEventListener("click", showWatching);
+  const back = $("#back"); if (back) back.addEventListener("click", () => go("watching"));
 }
 
 // ---------- screen 2: setting up ----------
@@ -469,6 +476,12 @@ function showWatching() {
         <div class="seg" role="radiogroup" aria-label="Change to simulate">
           ${SCENARIOS.map(s => `<input type="radio" name="scn" id="scn-${s.id}" value="${s.id}" ${S.scenario === s.id ? "checked" : ""}><label for="scn-${s.id}">${esc(s.label)}</label>`).join("")}
         </div>
+        <div class="custom" id="custom" ${S.scenario === "custom" ? "" : "hidden"}>
+          <label class="field" for="c-name">Company name</label>
+          <input class="input" id="c-name" type="text" autocomplete="off" spellcheck="false" placeholder="DataHarvest Ltd" value="${esc(S.cName || "")}">
+          <label class="field" for="c-url">Company website <em>(Night's Watch opens it to find where they process data)</em></label>
+          <input class="input" id="c-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://example.com" value="${esc(S.cUrl || "")}">
+        </div>
         <div class="sim-actions">
           <button class="btn" type="button" id="run">Run simulation</button>
           <button class="link-btn" type="button" id="undo">Undo changes</button>
@@ -483,7 +496,9 @@ function showWatching() {
       <div class="footer" id="fast"></div>
     </main>`;
   $("#reconnect").addEventListener("click", () => { S.url = site; showConnect(); });
-  app.querySelectorAll('input[name="scn"]').forEach(i => i.addEventListener("change", () => { S.scenario = i.value; }));
+  app.querySelectorAll('input[name="scn"]').forEach(i => i.addEventListener("change", () => { S.scenario = i.value; $("#custom").hidden = i.value !== "custom"; }));
+  $("#c-name").addEventListener("input", e => { S.cName = e.target.value; });
+  $("#c-url").addEventListener("input", e => { S.cUrl = e.target.value; });
   $("#run").addEventListener("click", () => simulate(S.scenario));
   $("#undo").addEventListener("click", () => simulate("undo"));
   $("#sim-retry").addEventListener("click", () => simulate(S.jobScenario || S.scenario));
@@ -501,7 +516,8 @@ function showWatching() {
 
 function renderWatchingParts() {
   if (S.screen !== "watching" || !S.ov) return;
-  renderStatus(); renderVendors(); renderResult(); renderFast();
+  renderStatus(); renderVendors(); renderResult(); renderFast(); setTitle();
+  if (location.hash !== "#watching") history.replaceState({screen: "watching"}, "", "#watching");
 }
 
 function renderStatus() {
@@ -663,7 +679,8 @@ async function simulate(scenario) {
   const ol = $("#sim-steps"); ol.innerHTML = "";
   renderStepsInto(ol, [{text: scenario === "undo" ? "Undoing changes" : "Starting the simulation", state: "active"}]);
   let r;
-  try { r = await api("POST", "/api/simulate", {scenario}); }
+  const body = scenario === "custom" ? {scenario, name: (S.cName || "").trim(), url: (S.cUrl || "").trim()} : {scenario};
+  try { r = await api("POST", "/api/simulate", body); }
   catch { return simFailed("Can't reach the Night's Watch service."); }
   if (r.status === 409) return simFailed("Night's Watch is finishing another check. Try again in a moment.");
   if (r.status >= 400 || !r.data.job) return simFailed(r.data.error || `The request failed (${r.status}).`);
@@ -698,6 +715,30 @@ function simFailed(msg) {
 }
 
 // ---------- boot ----------
+// ---------- navigation ----------
+function go(screen, push) {
+  if (push !== false && location.hash !== "#" + screen) history.pushState({screen}, "", "#" + screen);
+  if (screen === "watching" && S.ov && S.ov.watching) showWatching(); else showConnect();
+  window.scrollTo({top: 0});
+}
+document.addEventListener("click", e => {
+  const a = e.target.closest && e.target.closest("#home");
+  if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+  e.preventDefault();
+  if (S.screen === "setup") return;          // setup finishes on its own; don't strand it
+  go("start");
+});
+window.addEventListener("popstate", () => {
+  if (S.screen === "setup") return;
+  go(location.hash === "#watching" ? "watching" : "start", false);
+});
+function setTitle() {
+  const vs = (S.ov && S.ov.vendors) || [];
+  const red = vs.filter(v => v.status === "not_compliant").length;
+  document.title = S.screen === "watching" && red ? `Night's Watch · ${red} vendor${red === 1 ? "" : "s"} not compliant`
+                 : S.screen === "watching" ? "Night's Watch · all vendors compliant" : "Night's Watch";
+}
+
 async function boot() {
   if (MOCK) { const n = document.createElement("div"); n.className = "mock-note"; n.innerHTML = 'Replay of a real recorded run · <a href="guided.html" style="color:inherit">detailed view</a>'; document.body.appendChild(n); }
   app.innerHTML = topBar("") + `<main class="hero"><p class="muted">Loading…</p></main>`;
