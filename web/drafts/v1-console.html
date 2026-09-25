@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night's Watch</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23ffffff%27 d=%27M5 4h3v3h2V4h4v3h2V4h3v6H5zM7 11h10v11H7z%27/%3E%3C/svg%3E">
+<meta name="description" content="Night's Watch reads your vendors' sub-processor pages and privacy policies every hour, keeps every version, and tells you when a change breaks your data policy.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<script>document.documentElement.classList.add('js')</script>
+<style>
+/* V1 "Console": the hero is the product, running. Refs: Better Stack, Dovetail, incident.io, Giga (Mobbin). */
+:root{
+  --bg:#07080a; --surface:#0e1013; --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.13);
+  --ink:#f5f5f3; --ink-2:#a1a5ab; --ink-3:#686d75;
+  --red:#ff5d5d; --red-bg:rgba(255,93,93,.09); --green:#3fd68a; --green-bg:rgba(63,214,138,.1); --blue:#8fb8ff;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+section{padding:112px 0;position:relative}
+h2{font-size:clamp(30px,4.2vw,46px);line-height:1.08;letter-spacing:-.035em;margin:0 0 18px;font-weight:600}
+p{margin:0 0 14px}
+.muted{color:var(--ink-2)}
+.center{text-align:center;max-width:640px;margin:0 auto}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;font:500 12px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:20px}
+.eyebrow:before{content:"";width:6px;height:6px;border-radius:1px;background:currentColor}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--ink);color:#08090b;font:600 15px/1 var(--sans);padding:13px 20px;border-radius:9px;border:0;cursor:pointer;white-space:nowrap;transition:transform .15s,background .15s}
+.btn:hover{background:#fff;transform:translateY(-1px)}
+.live{width:7px;height:7px;border-radius:50%;background:var(--green);flex:0 0 7px;animation:ping 2s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(63,214,138,.55)}70%,100%{box-shadow:0 0 0 7px rgba(63,214,138,0)}}
+.js .reveal{opacity:0;transform:translateY(24px);transition:opacity .8s ease,transform .8s cubic-bezier(.2,.8,.2,1)}
+.js .reveal.in{opacity:1;transform:none}
+
+/* nav */
+nav{position:fixed;top:0;left:0;right:0;z-index:20;border-bottom:1px solid transparent;transition:background .3s,border-color .3s}
+nav.scrolled{background:rgba(7,8,10,.72);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-color:var(--line)}
+nav .wrap{display:flex;justify-content:space-between;align-items:center;height:64px}
+.wordmark{font-weight:600;font-size:17px;display:flex;align-items:center;gap:10px;letter-spacing:-.01em}
+.wordmark svg{width:20px;height:20px;display:block}
+.nav-r{display:flex;align-items:center;gap:26px;font-size:14px;color:var(--ink-2)}
+.nav-r a:hover{color:var(--ink)}
+.nav-r .btn{padding:9px 14px;font-size:14px;color:#08090b}
+
+/* hero */
+.hero{position:relative;padding:150px 0 20px;overflow:hidden}
+.dots-bg{position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.09) 1px,transparent 1.2px);background-size:26px 26px;-webkit-mask-image:radial-gradient(ellipse 70% 55% at 50% 0%,#000 25%,transparent 75%);mask-image:radial-gradient(ellipse 70% 55% at 50% 0%,#000 25%,transparent 75%);pointer-events:none}
+.glow{position:absolute;left:50%;top:-260px;width:1200px;height:760px;transform:translateX(-50%);background:radial-gradient(closest-side,rgba(143,184,255,.15),transparent);pointer-events:none}
+.hero-copy{position:relative;text-align:center;max-width:1040px}
+.pill{display:inline-flex;align-items:center;gap:10px;padding:7px 14px 7px 12px;border:1px solid var(--line-2);border-radius:999px;background:rgba(255,255,255,.03);font-size:13px;color:var(--ink-2);margin-bottom:28px;transition:border-color .2s,color .2s}
+.pill:hover{border-color:rgba(255,255,255,.28);color:var(--ink)}
+.hero h1{font-size:clamp(38px,5.6vw,70px);text-wrap:balance;line-height:1.03;letter-spacing:-.045em;font-weight:600;margin:0 auto 22px;min-height:2.06em;display:flex;align-items:center;justify-content:center}
+.hero h1 span{display:block;background:linear-gradient(180deg,#fff 35%,#9ba1aa);-webkit-background-clip:text;background-clip:text;color:transparent;transition:opacity .45s,filter .45s,transform .45s}
+.hero h1 span.out{opacity:0;filter:blur(8px);transform:translateY(6px)}
+.sub{font-size:19px;color:var(--ink-2);max-width:580px;margin:0 auto 32px}
+.check{display:flex;max-width:470px;margin:0 auto;background:rgba(255,255,255,.04);border:1px solid var(--line-2);border-radius:12px;padding:5px;gap:6px;transition:border-color .2s,box-shadow .2s}
+.check:focus-within{border-color:rgba(255,255,255,.3);box-shadow:0 0 0 4px rgba(255,255,255,.05)}
+.check input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:15px var(--mono);padding:10px 12px}
+.check input:focus{outline:none}
+.check input::placeholder{color:var(--ink-3)}
+.hero small{display:block;color:var(--ink-3);font-size:13px;margin-top:12px}
+
+/* console */
+.stage{position:relative;max-width:1180px;margin:76px auto 0;padding:0 20px;perspective:1800px}
+.console{position:relative;background:linear-gradient(180deg,#111317,#0b0d10);border:1px solid var(--line-2);border-radius:14px;box-shadow:0 50px 140px -30px rgba(0,0,0,.9),0 0 80px -20px rgba(143,184,255,.12);transform-origin:50% 0;transform:rotateX(var(--tilt,0deg));overflow:hidden}
+.console:before{content:"";position:absolute;left:10%;right:10%;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent)}
+.c-bar{display:flex;align-items:center;gap:14px;height:44px;padding:0 16px;border-bottom:1px solid var(--line);font:500 12.5px var(--mono);color:var(--ink-3)}
+.c-bar .d{display:flex;gap:6px}.c-bar .d i{width:10px;height:10px;border-radius:50%;background:#23262b}
+.c-bar .t{flex:1}
+.c-bar .l{display:flex;align-items:center;gap:8px;color:var(--ink-2)}
+.c-body{display:grid;grid-template-columns:1.5fr 1fr;transition:opacity .5s}
+.c-body.fade{opacity:.15}
+.c-table{border-right:1px solid var(--line);min-width:0}
+.c-hd,.c-row{display:grid;grid-template-columns:1.45fr .9fr .7fr 1.05fr;align-items:center;gap:10px;padding:0 18px}
+.c-hd{height:38px;font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);border-bottom:1px solid var(--line)}
+.c-row{height:60px;border-bottom:1px solid var(--line);position:relative;font-size:14px;transition:background .4s}
+.c-row:last-child{border-bottom:0}
+.c-row:before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:transparent;transition:background .3s}
+.c-row.scan{background:linear-gradient(90deg,rgba(255,255,255,.07),rgba(255,255,255,.01))}
+.c-row.scan:before{background:var(--ink)}
+.c-row.bad{background:var(--red-bg)}
+.c-row.bad:before{background:var(--red)}
+.c-row .v b{display:block;font-weight:500;line-height:1.3}
+.c-row .v small{display:block;color:var(--ink-3);font-size:12px;line-height:1.3}
+.c-row .n,.c-row .tm{font:13px var(--mono);color:var(--ink-2);transition:color .3s}
+.c-row .n.up{color:var(--red)}
+.st{justify-self:start;display:inline-flex;align-items:center;gap:7px;font-size:12.5px;padding:4px 10px;border-radius:999px;background:var(--green-bg);color:var(--green);white-space:nowrap}
+.st i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.st.read{background:rgba(255,255,255,.07);color:var(--ink-2)}
+.st.read i{animation:blink .6s infinite alternate}
+.st.bad{background:rgba(255,93,93,.15);color:var(--red)}
+@keyframes blink{to{opacity:.2}}
+.c-log{display:flex;flex-direction:column;min-width:0}
+.c-log .hd{height:38px;display:flex;align-items:center;padding:0 16px;font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);border-bottom:1px solid var(--line)}
+#c-log{list-style:none;margin:0;padding:8px 0;font:12.5px/1.5 var(--mono);height:322px;overflow:hidden;-webkit-mask-image:linear-gradient(#000 65%,transparent);mask-image:linear-gradient(#000 65%,transparent)}
+#c-log li{display:grid;grid-template-columns:62px 1fr;gap:10px;padding:6px 16px;color:var(--ink-2);animation:drop .35s ease}
+#c-log time{color:var(--ink-3)}
+#c-log .dm{color:var(--ink)}
+#c-log .ign .m{color:var(--ink-3)}
+#c-log .bad .m,#c-log .bad .dm{color:var(--red)}
+@keyframes drop{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.toast{position:absolute;right:18px;bottom:18px;width:min(390px,calc(100% - 36px));background:#1a0e10;border:1px solid rgba(255,93,93,.55);border-radius:12px;padding:16px 18px;box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 50px rgba(255,93,93,.18);opacity:0;transform:translateY(18px) scale(.98);transition:opacity .45s,transform .45s cubic-bezier(.2,.8,.2,1);pointer-events:none}
+.toast.show{opacity:1;transform:none}
+.toast .tt{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;margin-bottom:6px}
+.toast .tt i{width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 12px var(--red)}
+.toast p{font-size:13.5px;color:var(--ink-2);margin:0}
+.toast p b{color:var(--ink);font-weight:500}
+.toast .pf{font:12px var(--mono);color:var(--ink-3);margin-top:10px}
+.stage-cap{text-align:center;color:var(--ink-3);font-size:12.5px;margin:16px 0 0}
+.runs{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:12px 40px;margin-top:64px;color:var(--ink-3);font-size:15px}
+.runs span{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.runs b{font-weight:600;color:#7d828a;letter-spacing:-.01em;font-size:17px}
+
+/* problem */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center}
+.lines{list-style:none;margin:28px 0 0;padding:0}
+.lines li{display:flex;gap:16px;font-size:19px;color:var(--ink-2);padding:16px 0;border-top:1px solid var(--line)}
+.lines li:last-child{border-bottom:1px solid var(--line)}
+.lines li span{font:500 12px/2.2 var(--mono);color:var(--ink-3)}
+.diff{background:var(--surface);border:1px solid var(--line-2);border-radius:14px;overflow:hidden;font:13px var(--mono);box-shadow:0 30px 80px -30px rgba(0,0,0,.8)}
+.diff .hd{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);color:var(--ink-3);font-size:12px}
+.diff .hd .u{flex:1;background:rgba(255,255,255,.04);border-radius:6px;padding:5px 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.diff .hd .ch{color:var(--red)}
+.d-row{display:flex;justify-content:space-between;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);color:var(--ink-2)}
+.d-row span:last-child{color:var(--ink-3)}
+.d-row.add{max-height:0;padding-top:0;padding-bottom:0;opacity:0;overflow:hidden;background:var(--red-bg);color:var(--ink);box-shadow:inset 2px 0 0 var(--red);transition:max-height .5s ease .7s,padding .5s ease .7s,opacity .4s ease 1s}
+.d-row.add span:first-child:before{content:"+ ";color:var(--red)}
+.d-row.add em{font-style:normal;font-size:10.5px;color:var(--red);border:1px solid rgba(255,93,93,.5);border-radius:4px;padding:1px 5px;margin-left:8px;vertical-align:1px}
+.diff.in .d-row.add{max-height:60px;padding-top:12px;padding-bottom:12px;opacity:1}
+.diff .cap{padding:11px 18px;color:var(--ink-3);font-size:12px}
+
+/* how */
+.track{position:relative;margin:70px 0 64px}
+.rail{position:absolute;left:0;right:0;top:9px;height:2px;background:var(--line-2);border-radius:2px}
+.fill{position:absolute;left:0;top:0;height:100%;width:0;border-radius:2px;background:linear-gradient(90deg,var(--green),var(--blue) 55%,var(--red));box-shadow:0 0 18px rgba(143,184,255,.45);transition:width 2.6s cubic-bezier(.45,0,.2,1),height 2.6s cubic-bezier(.45,0,.2,1)}
+.track.in .fill{width:100%}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:28px;position:relative}
+.steps li{position:relative;padding-top:46px;opacity:.3;transition:opacity .6s}
+.steps .nd{position:absolute;left:0;top:1px;width:18px;height:18px;border-radius:50%;background:var(--bg);border:2px solid var(--line-2);transition:border-color .4s,box-shadow .4s,background .4s}
+.steps b{display:block;font:500 12px var(--mono);color:var(--ink-3);margin-bottom:8px}
+.steps p{margin:0;font-size:16.5px;color:var(--ink-2)}
+.track.in .steps li{opacity:1}
+.track.in .steps li:nth-child(1) .nd{border-color:var(--green);box-shadow:0 0 14px var(--green)}
+.track.in .steps li:nth-child(2){transition-delay:.7s}
+.track.in .steps li:nth-child(2) .nd{border-color:#86cfc0;box-shadow:0 0 14px #86cfc0;transition-delay:.7s}
+.track.in .steps li:nth-child(3){transition-delay:1.4s}
+.track.in .steps li:nth-child(3) .nd{border-color:var(--blue);box-shadow:0 0 14px var(--blue);transition-delay:1.4s}
+.track.in .steps li:nth-child(4){transition-delay:2.1s}
+.track.in .steps li:nth-child(4) .nd{border-color:var(--red);background:var(--red);box-shadow:0 0 18px var(--red);transition-delay:2.1s}
+.alert{max-width:640px;margin:0 auto;border:1px solid rgba(255,93,93,.5);background:linear-gradient(180deg,rgba(255,93,93,.08),rgba(255,93,93,.03));border-radius:14px;padding:24px 26px;box-shadow:0 0 80px -20px rgba(255,93,93,.3)}
+.alert .tt{display:flex;gap:11px;align-items:center;font-weight:600;font-size:18px;margin-bottom:16px}
+.alert .tt i{width:9px;height:9px;border-radius:50%;background:var(--red);box-shadow:0 0 12px var(--red);animation:pr 1.6s infinite}
+@keyframes pr{0%{box-shadow:0 0 0 0 rgba(255,93,93,.6)}70%,100%{box-shadow:0 0 0 8px rgba(255,93,93,0)}}
+.alert dl{display:grid;grid-template-columns:70px 1fr;gap:11px 16px;margin:0;font-size:15px;color:var(--ink-2)}
+.alert dt{font:500 11px/1.9 var(--mono);color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
+.alert dd{margin:0}
+.alert dd b{color:var(--ink);font-weight:500}
+.alert .cap{color:var(--ink-3);font-size:12px;margin-top:18px}
+
+/* value */
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:52px}
+.tile{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.01));border:1px solid var(--line);border-radius:16px;overflow:hidden;transition:border-color .3s,transform .3s}
+.tile:hover{border-color:var(--line-2);transform:translateY(-3px)}
+.viz{height:200px;border-bottom:1px solid var(--line);position:relative;display:flex;align-items:center;justify-content:center;padding:20px;overflow:hidden;background:radial-gradient(ellipse at 50% 120%,rgba(143,184,255,.08),transparent 70%)}
+.tile .tx{padding:22px 24px 26px}
+.tile h3{margin:0 0 6px;font-size:17px;font-weight:600;letter-spacing:-.01em}
+.tile p{margin:0;font-size:15px;color:var(--ink-2)}
+.rb{width:100%;max-width:290px}
+.rb-in{background:rgba(0,0,0,.35);border:1px solid var(--line-2);border-radius:9px;padding:12px 14px;font-size:14.5px;min-height:46px;box-shadow:0 0 0 4px rgba(255,255,255,.03)}
+.caret{display:inline-block;width:2px;height:16px;background:var(--ink);vertical-align:-3px;margin-left:1px;animation:cb 1s steps(1) infinite}
+@keyframes cb{50%{opacity:0}}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.chip{font:11.5px var(--mono);color:var(--ink-2);border:1px solid var(--line-2);border-radius:6px;padding:4px 8px;background:rgba(255,255,255,.02)}
+.chip b{color:var(--ink);font-weight:500}
+.snaps{position:relative;width:190px;height:150px}
+.snap{position:absolute;inset:0;background:#15181c;border:1px solid var(--line-2);border-radius:9px;padding:12px;transition:transform .5s cubic-bezier(.2,.8,.2,1);box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.snap .dt{font:10.5px var(--mono);color:var(--ink-3);display:block;margin-bottom:10px}
+.snap i{display:block;height:6px;border-radius:3px;background:rgba(255,255,255,.08);margin-bottom:8px}
+.snap i.r{background:rgba(255,93,93,.55)}
+.snap.s3{transform:translate(-28px,-18px) rotate(-6deg);opacity:.6}
+.snap.s2{transform:translate(-14px,-9px) rotate(-3deg);opacity:.8}
+.tile:hover .snap.s3{transform:translate(-60px,-14px) rotate(-10deg)}
+.tile:hover .snap.s2{transform:translate(-30px,-7px) rotate(-5deg)}
+.tile:hover .snap.s1{transform:translate(20px,4px) rotate(3deg)}
+.mini{width:100%;max-width:280px;font-size:13.5px}
+.mini div{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.mini div:last-child{border-bottom:0}
+.mini b{font-weight:500;flex:1}
+.mini span{font:12px var(--mono);color:var(--ink-3)}
+.mini i{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px rgba(63,214,138,.6)}
+.mini .r span{color:var(--red)}
+.mini .r i{background:var(--red);box-shadow:0 0 10px var(--red);animation:pr 1.6s infinite}
+
+/* contact */
+.contact{overflow:hidden}
+.contact .gl{position:absolute;left:50%;top:48%;width:900px;height:600px;transform:translate(-50%,-50%);background:radial-gradient(closest-side,rgba(143,184,255,.1),transparent);pointer-events:none}
+.lead{position:relative;max-width:500px;margin:44px auto 0;padding:30px;background:rgba(14,16,19,.8);border:1px solid var(--line-2);border-radius:16px;box-shadow:0 30px 80px -30px rgba(0,0,0,.9)}
+label{display:block;font:500 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin:18px 0 8px}
+label:first-of-type{margin-top:0}
+label em{font-style:normal;text-transform:none;letter-spacing:0}
+.lead input{width:100%;background:rgba(0,0,0,.4);border:1px solid var(--line-2);border-radius:8px;color:var(--ink);padding:12px 14px;font:15px var(--sans);transition:border-color .2s,box-shadow .2s}
+.lead input#vendor{font-family:var(--mono)}
+.lead input:focus{outline:none;border-color:rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(255,255,255,.05)}
+.lead .btn{margin-top:24px;width:100%;padding:14px}
+.lead small{display:block;color:var(--ink-3);font-size:12px;margin-top:14px;text-align:center}
+.thanks{display:none;text-align:center;padding:24px 0;font-size:17px}
+
+footer{border-top:1px solid var(--line);padding:32px 0;color:var(--ink-3);font-size:13px}
+footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+
+/* review-only version switcher */
+.vs{position:fixed;left:12px;bottom:12px;z-index:50;display:flex;gap:2px;padding:3px;background:rgba(20,20,24,.9);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.14);border-radius:10px;font:500 11px/1 ui-monospace,Menlo,monospace}
+.vs a{padding:7px 9px;border-radius:7px;color:#aaa}
+.vs a:hover{color:#fff}
+.vs a[aria-current]{background:#fff;color:#000}
+
+@media (max-width:900px){
+  .split{grid-template-columns:minmax(0,1fr);gap:40px}
+  .bento{grid-template-columns:1fr}
+  .c-body{grid-template-columns:1fr}
+  .c-table{border-right:0;border-bottom:1px solid var(--line)}
+  #c-log{height:170px}
+  .steps{grid-template-columns:1fr;gap:34px;padding-left:40px}
+  .steps li{padding-top:0}
+  .steps .nd{left:-40px;top:2px}
+  .rail{left:8px;right:auto;top:0;bottom:0;width:2px;height:auto}
+  .fill{width:100%;height:0}
+  .track.in .fill{width:100%;height:100%}
+}
+@media (max-width:640px){
+  section{padding:88px 0}
+  .hero{padding-top:120px}
+  .nav-r .hide{display:none}
+  .sub{font-size:17px}
+  .c-hd,.c-row{grid-template-columns:1.3fr .6fr 1fr;padding:0 14px}
+  .c-hd .n,.c-row .n{display:none}
+  .toast{right:10px;bottom:10px;width:calc(100% - 20px)}
+  .lines li{font-size:17px}
+  .alert dl{grid-template-columns:1fr;gap:4px}
+  .alert dd{margin-bottom:10px}
+  .lead{padding:22px}
+  .vs{left:8px;right:8px;justify-content:center}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*:before,*:after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+
+<nav id="nav"><div class="wrap">
+  <a class="wordmark" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 4h3v3h2V4h4v3h2V4h3v6H5zM7 11h10v11H7z"/></svg>Night's Watch</a>
+  <div class="nav-r">
+    <a class="hide" href="#problem">Problem</a>
+    <a class="hide" href="#how">How it works</a>
+    <a class="btn" href="#contact">Get in touch</a>
+  </div>
+</div></nav>
+
+<header class="hero">
+  <div class="dots-bg" aria-hidden="true"></div>
+  <div class="glow" aria-hidden="true"></div>
+  <div class="wrap hero-copy">
+    <a class="pill" href="#how"><span class="live"></span>Checking every hour<span aria-hidden="true">→</span></a>
+    <h1><span id="q">Who is handling your company's data this month?</span></h1>
+    <p class="sub">Hourly checks on every vendor's sub-processor list and privacy policy. An alert the moment one breaks your data policy.</p>
+    <form class="check" id="check">
+      <input id="domain" type="text" placeholder="vendor.com" aria-label="Vendor domain" autocomplete="off" spellcheck="false">
+      <button class="btn" type="submit">Check a vendor</button>
+    </form>
+    <small>We look up its sub-processors and send you what we find.</small>
+  </div>
+
+  <div class="stage">
+    <div class="console" id="console" role="img" aria-label="Example dashboard. Night's Watch checks six fictional vendors each hour and flags Larkspur for adding a sub-processor in Brazil.">
+      <div class="c-bar">
+        <span class="d" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="t">Acme Inc. / Vendors</span>
+        <span class="l"><span class="live"></span>Hourly check · <span id="c-clock">12:00</span></span>
+      </div>
+      <div class="c-body" id="c-body">
+        <div class="c-table">
+          <div class="c-hd"><span>Vendor</span><span class="n">Sub-processors</span><span>Checked</span><span>Status</span></div>
+          <div id="c-rows"></div>
+        </div>
+        <div class="c-log">
+          <div class="hd">Activity</div>
+          <ol id="c-log"></ol>
+        </div>
+      </div>
+      <div class="toast" id="toast" aria-hidden="true">
+        <div class="tt"><i></i><span id="t-t"></span></div>
+        <p id="t-b"></p>
+        <div class="pf" id="t-p"></div>
+      </div>
+    </div>
+    <p class="stage-cap">Fictional vendors. This is what you see.</p>
+  </div>
+
+  <div class="wrap runs"><span>Runs on</span><b>Nimble</b><b>RawTree</b><b>Liquid AI</b><b>AWS Bedrock</b></div>
+</header>
+
+<section id="problem">
+  <div class="wrap split">
+    <div class="reveal">
+      <div class="eyebrow">The problem</div>
+      <h2>Your vendors have vendors.</h2>
+      <ul class="lines">
+        <li><span>01</span>Every vendor you use passes your data on to its own suppliers.</li>
+        <li><span>02</span>That list can change any day. The notice is an edit to a web page.</li>
+        <li><span>03</span>You find out at the next audit. Or from a customer.</li>
+      </ul>
+    </div>
+    <div class="diff reveal" id="diff">
+      <div class="hd"><span class="u">larkspur.com/legal/subprocessors</span><span class="ch">changed 25 Sep</span></div>
+      <div class="d-row"><span>Amazon Web Services</span><span>Ireland</span></div>
+      <div class="d-row"><span>Google Cloud</span><span>Belgium</span></div>
+      <div class="d-row"><span>Twilio</span><span>United States</span></div>
+      <div class="d-row add"><span>Orbit Data Services<em>NEW</em></span><span>Brazil</span></div>
+      <div class="d-row"><span>Zendesk</span><span>United States</span></div>
+      <div class="cap">One row added. No email sent. Fictional vendor.</div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="center reveal">
+      <div class="eyebrow">How it works</div>
+      <h2>We read the pages so you don't have to.</h2>
+    </div>
+    <div class="track" id="track">
+      <div class="rail" aria-hidden="true"><div class="fill"></div></div>
+      <ol class="steps">
+        <li><span class="nd"></span><b>01</b><p>Every hour, we read each vendor's sub-processor list and privacy policy.</p></li>
+        <li><span class="nd"></span><b>02</b><p>We keep every version, with the date.</p></li>
+        <li><span class="nd"></span><b>03</b><p>We compare it with the last one.</p></li>
+        <li><span class="nd"></span><b>04</b><p>If a change breaks one of your rules, you get an alert.</p></li>
+      </ol>
+    </div>
+    <div class="alert reveal" role="note">
+      <div class="tt"><i></i>Larkspur broke rule R1</div>
+      <dl>
+        <dt>What</dt><dd>Added <b>Orbit Data Services (Brazil)</b> as a sub-processor</dd>
+        <dt>Rule</dt><dd>R1: company data stays in the EU or an approved country</dd>
+        <dt>Notice</dt><dd>None received. GDPR Article 28 requires one, with time to object.</dd>
+        <dt>Proof</dt><dd>Page as it was on 25 Sep, 13:00</dd>
+      </dl>
+      <div class="cap">Example alert. Fictional vendor.</div>
+    </div>
+  </div>
+</section>
+
+<section id="value">
+  <div class="wrap">
+    <div class="center reveal">
+      <div class="eyebrow">What you get</div>
+      <h2>Rules in your words. Proof with every alert.</h2>
+    </div>
+    <div class="bento">
+      <div class="tile reveal">
+        <div class="viz"><div class="rb">
+          <div class="rb-in"><span id="typed">Company data stays in the EU.</span><span class="caret"></span></div>
+          <div class="chips"><span class="chip"><b>R1</b> EU only</span><span class="chip"><b>R2</b> No AI training</span><span class="chip"><b>R3</b> 90 days max</span></div>
+        </div></div>
+        <div class="tx"><h3>Your rules, in plain words</h3><p>"Company data stays in the EU." That is a rule. Add as many as you need.</p></div>
+      </div>
+      <div class="tile reveal">
+        <div class="viz"><div class="snaps" aria-hidden="true">
+          <div class="snap s3"><span class="dt">25 Sep · 11:00</span><i style="width:80%"></i><i style="width:60%"></i><i style="width:70%"></i><i style="width:50%"></i></div>
+          <div class="snap s2"><span class="dt">25 Sep · 12:00</span><i style="width:80%"></i><i style="width:60%"></i><i style="width:70%"></i><i style="width:50%"></i></div>
+          <div class="snap s1"><span class="dt">25 Sep · 13:00</span><i style="width:80%"></i><i style="width:60%"></i><i class="r" style="width:74%"></i><i style="width:70%"></i><i style="width:50%"></i></div>
+        </div></div>
+        <div class="tx"><h3>Proof for every alert</h3><p>The page as it was, with the date. Ready to send to the vendor.</p></div>
+      </div>
+      <div class="tile reveal">
+        <div class="viz"><div class="mini" aria-hidden="true">
+          <div class="r"><i></i><b>Larkspur</b><span>Brazil</span></div>
+          <div><i></i><b>Quillmail</b><span>EU</span></div>
+          <div><i></i><b>Kestrel Pay</b><span>EU</span></div>
+          <div><i></i><b>Hollowbase</b><span>EU</span></div>
+        </div></div>
+        <div class="tx"><h3>One list, always current</h3><p>Every vendor, where your data sits, green or red.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contact" class="contact">
+  <div class="gl" aria-hidden="true"></div>
+  <div class="wrap">
+    <div class="center reveal">
+      <div class="eyebrow">Get in touch</div>
+      <h2>Send us one vendor. We check it.</h2>
+      <p class="muted">You get the result within a day.</p>
+    </div>
+    <form class="lead reveal" id="lead" novalidate>
+      <label for="name">Name</label>
+      <input id="name" name="name" type="text" required autocomplete="name">
+      <label for="email">Work email</label>
+      <input id="email" name="email" type="email" required autocomplete="email">
+      <label for="vendor">Vendor to check first <em>(optional)</em></label>
+      <input id="vendor" name="vendor" type="text" placeholder="vendor.com" autocomplete="off" spellcheck="false">
+      <button class="btn" type="submit">Send</button>
+      <small>We use this to reply to you and for nothing else.</small>
+      <div class="thanks" id="thanks">Thanks. We will reply within a day.</div>
+    </form>
+  </div>
+</section>
+
+<footer><div class="wrap">
+  <span>Built at the Long Horizon Agents Hackathon, San Francisco, September 2026.</span>
+  <span>Runs on Nimble, RawTree, Liquid AI and AWS Bedrock.</span>
+</div></footer>
+
+<!-- Draft: an alternative design kept for reference. The live page is ../index.html -->
+<div class="vs"><a href="../index.html">Live page</a><a href="v1-console.html" aria-current="page">V1 Console</a><a href="v2-status.html">V2 Status</a></div>
+
+<script>
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Nav background once scrolled.
+(function(){
+  const nav=document.getElementById('nav');
+  const on=()=>nav.classList.toggle('scrolled',scrollY>20);
+  addEventListener('scroll',on,{passive:true}); on();
+})();
+
+// Reveal on scroll.
+(function(){
+  const els=document.querySelectorAll('.reveal,#track');
+  if(reduce||!('IntersectionObserver' in window)){els.forEach(e=>e.classList.add('in'));return;}
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}}),{threshold:.25});
+  els.forEach(e=>io.observe(e));
+})();
+
+// Console tilts flat as it scrolls into view.
+(function(){
+  const c=document.getElementById('console');
+  function t(){
+    if(reduce||innerWidth<900){c.style.setProperty('--tilt','0deg');return;}
+    const k=Math.min(1,Math.max(0,c.getBoundingClientRect().top/(innerHeight*.9)));
+    c.style.setProperty('--tilt',(k*16).toFixed(2)+'deg');
+  }
+  addEventListener('scroll',t,{passive:true}); addEventListener('resize',t); t();
+})();
+
+// Hero console: an hourly pass over six fictional vendors. Most checks find nothing;
+// one finds a new sub-processor, one finds a privacy policy change.
+(function(){
+  const V=[
+    {n:'Larkspur',w:'Support desk',d:'larkspur.com',s:12},
+    {n:'Quillmail',w:'Email',d:'quillmail.io',s:8},
+    {n:'Kestrel Pay',w:'Payments',d:'kestrelpay.com',s:21},
+    {n:'Hollowbase',w:'Database',d:'hollowbase.com',s:6},
+    {n:'Birchline',w:'HR',d:'birchline.hr',s:9},
+    {n:'Wrenly',w:'Analytics',d:'wrenly.so',s:14}
+  ];
+  const HOURS=['12:00','13:00','14:00'];
+  const EV={
+    '12:00':{3:{m:'Only the date changed. Ignored.',k:'ign'}},
+    '13:00':{0:{m:'New sub-processor: Orbit Data Services (Brazil)',k:'bad',rule:'R1',s:13,
+      t:'Larkspur broke rule R1',b:'Added <b>Orbit Data Services (Brazil)</b>. R1: company data stays in the EU or an approved country.',p:'Proof: page as it was on 25 Sep, 13:00'}},
+    '14:00':{1:{m:'Privacy policy now allows AI training on customer data',k:'bad',rule:'R2',
+      t:'Quillmail broke rule R2',b:'Privacy policy now allows <b>training AI models on customer data</b>. R2: no vendor may train AI on our data.',p:'Proof: page as it was on 25 Sep, 14:00'}}
+  };
+  const rowsEl=document.getElementById('c-rows'), logEl=document.getElementById('c-log'),
+        clock=document.getElementById('c-clock'), body=document.getElementById('c-body'),
+        toast=document.getElementById('toast');
+  const R=V.map(v=>{
+    const r=document.createElement('div'); r.className='c-row';
+    r.innerHTML=`<div class="v"><b>${v.n}</b><small>${v.w}</small></div><span class="n">${v.s}</span><span class="tm">11:00</span><span class="st"><i></i>Within policy</span>`;
+    rowsEl.appendChild(r);
+    return {el:r,n:r.querySelector('.n'),tm:r.querySelector('.tm'),st:r.querySelector('.st')};
+  });
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  const status=(i,cls,txt)=>{R[i].st.className='st'+(cls?' '+cls:'');R[i].st.innerHTML='<i></i>'+txt;};
+  function log(time,dom,msg,cls){
+    const li=document.createElement('li'); if(cls) li.className=cls;
+    li.innerHTML=`<time>${time}</time><span>${dom?`<span class="dm">${dom}</span> `:''}<span class="m">${msg}</span></span>`;
+    logEl.prepend(li); while(logEl.children.length>12) logEl.lastChild.remove();
+  }
+  function showToast(e){
+    document.getElementById('t-t').textContent=e.t;
+    document.getElementById('t-b').innerHTML=e.b;
+    document.getElementById('t-p').textContent=e.p;
+    toast.classList.add('show');
+  }
+  function flag(i,e){
+    R[i].el.classList.add('bad'); status(i,'bad','Broke '+e.rule);
+    if(e.s){R[i].n.textContent=e.s;R[i].n.classList.add('up');}
+  }
+  function reset(){
+    logEl.innerHTML=''; toast.classList.remove('show');
+    R.forEach((r,i)=>{r.el.classList.remove('bad','scan');r.n.textContent=V[i].s;r.n.classList.remove('up');r.tm.textContent='11:00';status(i,'','Within policy');});
+  }
+  const stamp=(h,i)=>h.slice(0,3)+'00:'+String(i*4+3).padStart(2,'0');
+
+  if(reduce){ // static end state
+    HOURS.slice(0,2).forEach(h=>{clock.textContent=h;V.forEach((v,i)=>{const e=EV[h][i];R[i].tm.textContent=h;log(stamp(h,i),v.d,e?e.m:'No change',e?e.k:'');if(e&&e.k==='bad')flag(i,e);});});
+    showToast(EV['13:00'][0]); return;
+  }
+  (async function run(){
+    for(;;){
+      reset(); body.classList.remove('fade');
+      for(const h of HOURS){
+        clock.textContent=h;
+        for(let i=0;i<V.length;i++){
+          R[i].el.classList.add('scan'); if(!R[i].el.classList.contains('bad')) status(i,'read','Reading');
+          await sleep(620);
+          const e=EV[h][i]; R[i].tm.textContent=h; R[i].el.classList.remove('scan');
+          log(stamp(h,i),V[i].d,e?e.m:'No change',e?e.k:'');
+          if(e&&e.k==='bad'){
+            flag(i,e); await sleep(450);
+            log(stamp(h,i).slice(0,6)+String(i*4+4).padStart(2,'0'),'','Rule '+e.rule+' broken. Alert sent.','bad');
+            showToast(e); await sleep(4600); toast.classList.remove('show'); await sleep(400);
+          } else if(!R[i].el.classList.contains('bad')) status(i,'','Within policy');
+        }
+        await sleep(900);
+      }
+      await sleep(1500); body.classList.add('fade'); await sleep(600);
+    }
+  })();
+})();
+
+// Rule box: type a few example rules.
+(function(){
+  const el=document.getElementById('typed'); if(reduce) return;
+  const rules=['Company data stays in the EU.','No vendor trains AI on our data.','We keep data 90 days or less.'];
+  let r=0,c=rules[0].length,del=true;
+  setTimeout(function tick(){
+    if(del){c--; if(c<=0){del=false;r=(r+1)%rules.length;}}
+    else{c++; if(c>=rules[r].length){del=true; el.textContent=rules[r]; return setTimeout(tick,2200);}}
+    el.textContent=rules[r].slice(0,Math.max(0,c));
+    setTimeout(tick,del?28:55);
+  },2200);
+})();
+
+// Hero: rotate the question.
+(function(){
+  const el=document.getElementById('q'); if(reduce) return;
+  const qs=["Who is handling your company's data this month?","Which vendor added a sub‑processor last week?","Did a vendor just allow AI training on your data?","Where did your company's data go this quarter?"];
+  let i=0;
+  setInterval(()=>{el.classList.add('out');setTimeout(()=>{i=(i+1)%qs.length;el.textContent=qs[i];el.classList.remove('out');},450);},5200);
+})();
+
+// Hero check box: carries the domain down to the contact form for now.
+document.getElementById('check').addEventListener('submit',e=>{
+  e.preventDefault();
+  const d=document.getElementById('domain').value.trim();
+  if(d) document.getElementById('vendor').value=d;
+  document.getElementById('contact').scrollIntoView({behavior:'smooth'});
+  setTimeout(()=>document.getElementById('name').focus({preventScroll:true}),700);
+});
+
+// Contact form. TODO wire to a backend (RawTree nw_leads table or a mail relay).
+document.getElementById('lead').addEventListener('submit',e=>{
+  e.preventDefault();
+  const f=e.target;
+  if(!f.name.value.trim()||!f.email.validity.valid){f.reportValidity();return;}
+  [...f.querySelectorAll('label,input,button,small')].forEach(el=>el.style.display='none');
+  document.getElementById('thanks').style.display='block';
+});
+</script>
+</body>
+</html>

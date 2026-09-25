@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night's Watch</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%2315140f%27 d=%27M5 4h3v3h2V4h4v3h2V4h3v6H5zM7 11h10v11H7z%27/%3E%3C/svg%3E">
+<meta name="description" content="Night's Watch reads your vendors' sub-processor pages and privacy policies every hour, keeps every version, and tells you when a change breaks your data policy.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<script>document.documentElement.classList.add('js')</script>
+<style>
+/* V2 "Status": a status page for your vendors. Light, paper, mono. Refs: Stripe and Eventbrite status pages, Greptile live feed, Zaro (Mobbin). */
+:root{
+  --bg:#f4f2ed; --paper:#fbfaf8; --ink:#15140f; --ink-2:#55534b; --ink-3:#8c897f; --line:#e3dfd5; --line-2:#cfcabd;
+  --ok:#2e9e5b; --ok-bg:#eaf6ee; --ign:#a7dab9; --bad:#df4238; --bad-bg:#fcebe8; --bad-ink:#a3241c; --hl:#fff0a0;
+  --sans:Geist,Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --shadow:0 1px 0 #fff inset,0 30px 60px -32px rgba(50,40,15,.28),0 10px 24px -14px rgba(50,40,15,.14);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1140px;margin:0 auto;padding:0 20px}
+section{padding:110px 0;position:relative}
+h2{font-size:clamp(30px,4vw,46px);line-height:1.06;letter-spacing:-.035em;margin:0 0 18px;font-weight:600}
+p{margin:0 0 14px}
+.tag{display:inline-flex;align-items:center;gap:8px;font:500 12px/1 var(--mono);color:var(--ink-2);letter-spacing:.02em;margin-bottom:22px}
+.tag:before{content:"["}.tag:after{content:"]"}
+.tag:before,.tag:after{color:var(--ink-3)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--ink);color:var(--bg);font:600 15px/1 var(--sans);padding:13px 20px;border-radius:9px;border:0;cursor:pointer;white-space:nowrap;transition:transform .15s,box-shadow .15s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px -6px rgba(0,0,0,.4)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:0 0 8px;animation:ping 2s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(46,158,91,.5)}70%,100%{box-shadow:0 0 0 7px rgba(46,158,91,0)}}
+.js .reveal{opacity:0;transform:translateY(20px);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.8,.2,1)}
+.js .reveal.in{opacity:1;transform:none}
+
+/* nav */
+nav{position:fixed;top:0;left:0;right:0;z-index:20;border-bottom:1px solid transparent;transition:background .3s,border-color .3s}
+nav.scrolled{background:rgba(244,242,237,.82);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-color:var(--line)}
+nav .wrap{display:flex;justify-content:space-between;align-items:center;height:64px}
+.wordmark{font-weight:600;font-size:17px;display:flex;align-items:center;gap:10px;letter-spacing:-.01em}
+.wordmark svg{width:20px;height:20px;display:block}
+.nav-r{display:flex;align-items:center;gap:26px;font-size:14px;color:var(--ink-2)}
+.nav-r a:hover{color:var(--ink)}
+.nav-r .btn{padding:9px 14px;font-size:14px;color:var(--bg)}
+
+/* hero */
+.hero{position:relative;padding:140px 0 100px;overflow:hidden}
+.paper-grid{position:absolute;inset:0;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:48px 48px;-webkit-mask-image:linear-gradient(#000,transparent 85%);mask-image:linear-gradient(#000,transparent 85%);opacity:.55;pointer-events:none}
+.hero .wrap{position:relative;display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center}
+.hero h1{font-size:clamp(38px,4.4vw,58px);line-height:1.02;letter-spacing:-.042em;font-weight:600;margin:0 0 22px;min-height:3.06em;display:flex;align-items:flex-end;text-wrap:balance}
+.hero h1 span{display:block;transition:opacity .4s,transform .4s}
+.hero h1 span.out{opacity:0;transform:translateY(8px)}
+.sub{font-size:18.5px;color:var(--ink-2);max-width:500px;margin:0 0 30px}
+.check{display:flex;max-width:460px;background:var(--paper);border:1px solid var(--line-2);border-radius:12px;padding:5px;gap:6px;box-shadow:var(--shadow);transition:border-color .2s}
+.check:focus-within{border-color:var(--ink-3)}
+.check input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:15px var(--mono);padding:10px 12px}
+.check input:focus{outline:none}
+.check input::placeholder{color:var(--ink-3)}
+.hero small{display:block;color:var(--ink-3);font-size:13px;margin-top:12px}
+
+/* status board */
+.board{background:var(--paper);border:1px solid var(--line-2);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.b-hd{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);font-size:14px}
+.b-hd b{font-weight:600}
+.b-hd .lv{display:flex;align-items:center;gap:8px;font:12.5px var(--mono);color:var(--ink-2);white-space:nowrap}
+.banner{display:flex;gap:12px;align-items:flex-start;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--ok-bg);color:#1b6a3c;transition:background .4s,color .4s;min-height:72px}
+.banner .ic{width:22px;height:22px;border-radius:50%;background:var(--ok);color:#fff;display:grid;place-items:center;flex:0 0 22px;margin-top:1px;transition:background .4s}
+.banner .ic svg{width:12px;height:12px}
+.banner .ic .no,.banner.bad .ic .ok{display:none}
+.banner.bad .ic .no{display:block}
+.banner b{display:block;font-weight:600;font-size:15px;line-height:1.35}
+.banner span{display:block;font-size:13.5px;opacity:.85;line-height:1.45}
+.banner.bad{background:var(--bad-bg);color:var(--bad-ink)}
+.banner.bad .ic{background:var(--bad)}
+.b-rows{padding:4px 18px}
+.b-row{display:grid;grid-template-columns:118px 1fr 84px;gap:14px;align-items:center;padding:11px 8px;margin:0 -8px;border-bottom:1px dashed var(--line);border-radius:8px}
+.b-row:last-child{border-bottom:0}
+.b-row .nm b{display:block;font-weight:500;font-size:14.5px;line-height:1.25}
+.b-row .nm small{color:var(--ink-3);font-size:12px}
+.bars{display:flex;gap:2px;height:30px}
+.bars i{flex:1;min-width:2px;border-radius:2px;background:var(--ok);transform-origin:bottom}
+.bars i.g{background:var(--ign)}
+.bars i.x{background:var(--bad)}
+.bars i.new{animation:grow .45s cubic-bezier(.2,.8,.2,1)}
+@keyframes grow{from{transform:scaleY(.1);opacity:.3}}
+.b-row .s{justify-self:end;font:500 12.5px var(--mono);color:var(--ok);white-space:nowrap}
+.b-row.bad .s{color:var(--bad)}
+.b-row.flash{animation:fl 1.4s ease}
+@keyframes fl{0%{background:rgba(223,66,56,.16)}100%{background:transparent}}
+.b-ft{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px 16px;padding:12px 18px;border-top:1px solid var(--line);font:12px var(--mono);color:var(--ink-3)}
+.legend{display:flex;gap:14px;flex-wrap:wrap}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+.b-cap{font:12px var(--mono);color:var(--ink-3);margin-top:12px;text-align:right}
+
+/* problem */
+.split{display:grid;grid-template-columns:1fr 1.05fr;gap:64px;align-items:center}
+.lines{list-style:none;margin:30px 0 0;padding:0;counter-reset:l}
+.lines li{display:flex;gap:18px;font-size:19px;line-height:1.45;color:var(--ink-2);padding:16px 0;border-top:1px solid var(--line-2)}
+.lines li:last-child{border-bottom:1px solid var(--line-2)}
+.lines li:before{counter-increment:l;content:"0" counter(l);font:500 12px/2.3 var(--mono);color:var(--ink-3)}
+.tree{background:var(--paper);border:1px solid var(--line-2);border-radius:16px;box-shadow:var(--shadow);font:13.5px/1.35 var(--mono);overflow:hidden}
+.tree .th{display:flex;justify-content:space-between;gap:12px;white-space:nowrap;padding:13px 20px;border-bottom:1px solid var(--line);color:var(--ink-3);font-size:12px}
+.tree .th span:first-child{overflow:hidden;text-overflow:ellipsis}
+.tree .tb{padding:16px 20px 18px}
+.tree ul{list-style:none;margin:0;padding:0}
+.tree ul ul{margin-left:10px}
+.tree li{position:relative;padding-left:26px}
+.tree .tb>ul>li{padding-left:0}
+.tree ul ul li:before{content:"";position:absolute;left:0;top:0;width:18px;height:18px;border-left:1px solid var(--line-2);border-bottom:1px solid var(--line-2);border-bottom-left-radius:7px}
+.tree ul ul li:after{content:"";position:absolute;left:0;top:0;bottom:0;border-left:1px solid var(--line-2)}
+.tree ul ul li:last-child:after{display:none}
+.ln{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:7px;color:var(--ink-2)}
+.ln b{font-weight:500;color:var(--ink)}
+.ln em{font-style:normal;color:var(--ink-3);white-space:nowrap}
+.ln small{color:var(--ink-3);font-size:12px}
+.tree li.add{max-height:0;opacity:0;overflow:hidden;transition:max-height .5s ease .6s,opacity .5s ease .9s}
+.tree li.add .ln{background:var(--bad-bg);color:var(--bad-ink)}
+.tree li.add .ln em{color:var(--bad-ink)}
+.tree li.add .nw{font-size:10.5px;border:1px solid rgba(223,66,56,.45);border-radius:4px;padding:1px 5px;margin-left:8px;vertical-align:1px;color:var(--bad)}
+.tree.in li.add{max-height:60px;opacity:1}
+.tree .cap{padding:12px 20px;border-top:1px solid var(--line);color:var(--ink-3);font-size:12px}
+
+/* how */
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:40px;flex-wrap:wrap}
+.head h2{max-width:560px;margin:0}
+.how{list-style:none;padding:0;margin:48px 0 0;display:grid;grid-template-columns:repeat(4,1fr);background:var(--paper);border:1px solid var(--line-2);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.how li{padding:22px 22px 26px;border-right:1px solid var(--line)}
+.how li:last-child{border-right:0}
+.ill{height:128px;border-radius:10px;background:var(--bg);border:1px solid var(--line);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:20px}
+.how .nm{font:500 12px var(--mono);color:var(--ink-3)}
+.how p{margin:8px 0 0;font-size:16px;color:var(--ink-2)}
+.pg{width:62px;height:80px;background:#fff;border:1px solid var(--line-2);border-radius:6px;padding:10px 8px;position:relative;overflow:hidden;box-shadow:0 4px 10px -6px rgba(0,0,0,.2)}
+.pg i{display:block;height:4px;border-radius:2px;background:#e6e2d8;margin-bottom:6px}
+.pg i.r{background:var(--bad)}
+.pg .sc{position:absolute;left:0;right:0;height:18px;top:-18px;background:linear-gradient(transparent,rgba(46,158,91,.28));border-bottom:1.5px solid var(--ok);animation:scan 2.4s ease-in-out infinite}
+@keyframes scan{0%{top:-18px}80%,100%{top:100%}}
+.stk{position:relative;width:90px;height:90px}
+.stk .pg{position:absolute;width:56px;height:70px;padding:8px 7px}
+.stk .pg:nth-child(1){left:0;top:0;opacity:.6}
+.stk .pg:nth-child(2){left:14px;top:8px;opacity:.8}
+.stk .pg:nth-child(3){left:28px;top:16px;animation:land 3s ease infinite}
+@keyframes land{0%,15%{transform:translateY(-14px);opacity:0}35%,100%{transform:none;opacity:1}}
+.stk .pg span{font:8.5px var(--mono);color:var(--ink-3);display:block;margin-bottom:6px}
+.neq{font:500 18px var(--mono);color:var(--ink-3)}
+.blink{animation:bl 1.6s ease infinite}
+@keyframes bl{50%{opacity:.25}}
+.nt{width:150px;background:#fff;border:1px solid var(--line-2);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.35;box-shadow:0 8px 20px -10px rgba(0,0,0,.3);animation:pop 3.2s ease infinite}
+.nt b{display:flex;align-items:center;gap:6px;font-size:12.5px;margin-bottom:3px}
+.nt b:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--bad)}
+.nt span{color:var(--ink-3)}
+@keyframes pop{0%,12%{transform:translateY(16px);opacity:0}25%,85%{transform:none;opacity:1}100%{transform:translateY(-6px);opacity:0}}
+.mail{max-width:700px;margin:56px auto 0;background:#fff;border:1px solid var(--line-2);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.mh{display:grid;grid-template-columns:74px 1fr;gap:7px 12px;padding:16px 24px;border-bottom:1px solid var(--line);font-size:14px;margin:0}
+.mh dt,.mb dt{font:500 11.5px/1.9 var(--mono);color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
+.mh dd,.mb dd{margin:0}
+.mb{padding:22px 24px 24px}
+.mb .tt{display:flex;align-items:center;gap:10px;font-weight:600;font-size:19px;letter-spacing:-.01em;margin-bottom:16px}
+.mb .tt:before{content:"";width:9px;height:9px;border-radius:50%;background:var(--bad);animation:pr 1.6s infinite}
+@keyframes pr{0%{box-shadow:0 0 0 0 rgba(223,66,56,.5)}70%,100%{box-shadow:0 0 0 8px rgba(223,66,56,0)}}
+.mb dl{display:grid;grid-template-columns:74px 1fr;gap:10px 12px;margin:0;font-size:15px;color:var(--ink-2)}
+.mb dd b{color:var(--ink);font-weight:500}
+.mb .pf{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:6px;padding:2px 8px;font:12.5px var(--mono);color:var(--ink)}
+.mail-cap{max-width:700px;margin:12px auto 0;font:12px var(--mono);color:var(--ink-3);text-align:right}
+
+/* value */
+.vals{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:48px;border-top:1px solid var(--ink)}
+.val{padding:28px 28px 8px 0}
+.val+.val{padding-left:28px;border-left:1px solid var(--line-2)}
+.vv{height:150px;display:flex;align-items:center}
+.val h3{margin:22px 0 6px;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.val p{margin:0;font-size:15.5px;color:var(--ink-2)}
+.rules{font-size:15px;line-height:1.35;display:grid;gap:9px}
+.rules div{display:flex;gap:10px;align-items:baseline}
+.rules code{font:500 11.5px var(--mono);color:var(--ink-3)}
+.rules mark{background:linear-gradient(transparent 55%,var(--hl) 55%);color:inherit;padding:0 2px}
+.stamp{display:inline-block;border:2px dashed var(--bad);color:var(--bad);border-radius:10px;padding:12px 16px;font:500 12px/1.6 var(--mono);text-transform:uppercase;letter-spacing:.06em;transform:rotate(-4deg);background:rgba(223,66,56,.04)}
+.stamp b{display:block;font-size:15px;letter-spacing:.02em}
+.mini{width:100%;max-width:260px;font-size:14px}
+.mini div{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line-2)}
+.mini div:last-child{border-bottom:0}
+.mini b{font-weight:500;flex:1}
+.mini span{font:12px var(--mono);color:var(--ink-3)}
+.mini i{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.mini .r i{background:var(--bad)}
+.mini .r span{color:var(--bad)}
+
+/* contact */
+.cta{background:var(--ink);color:#f4f2ed;border-radius:22px;padding:60px;display:grid;grid-template-columns:1fr 1fr;gap:56px;position:relative;overflow:hidden}
+.cta:before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:48px 48px;-webkit-mask-image:radial-gradient(ellipse at 0% 0%,#000,transparent 70%);mask-image:radial-gradient(ellipse at 0% 0%,#000,transparent 70%);pointer-events:none}
+.cta>*{position:relative}
+.cta .tag{color:#b9b5aa}
+.cta h2{font-size:clamp(32px,4vw,50px)}
+.cta .muted{color:#b9b5aa;font-size:18px}
+.lead label{display:block;font:500 11.5px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:#8f8b80;margin:18px 0 8px}
+.lead label:first-of-type{margin-top:0}
+.lead label em{font-style:normal;text-transform:none;letter-spacing:0}
+.lead input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:9px;color:#fff;padding:13px 14px;font:15px var(--sans);transition:border-color .2s,background .2s}
+.lead input#vendor{font-family:var(--mono)}
+.lead input:focus{outline:none;border-color:rgba(255,255,255,.45);background:rgba(255,255,255,.09)}
+.lead .btn{margin-top:24px;width:100%;padding:14px;background:#f4f2ed;color:var(--ink)}
+.lead small{display:block;color:#8f8b80;font-size:12px;margin-top:14px}
+.thanks{display:none;font-size:18px;padding:40px 0}
+
+footer{padding:36px 0 44px;color:var(--ink-3);font-size:13px}
+footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+
+/* review-only version switcher */
+.vs{position:fixed;left:12px;bottom:12px;z-index:50;display:flex;gap:2px;padding:3px;background:rgba(20,20,24,.9);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.14);border-radius:10px;font:500 11px/1 ui-monospace,Menlo,monospace}
+.vs a{padding:7px 9px;border-radius:7px;color:#aaa}
+.vs a:hover{color:#fff}
+.vs a[aria-current]{background:#fff;color:#000}
+
+@media (max-width:980px){
+  .hero .wrap,.split,.cta{grid-template-columns:minmax(0,1fr)}
+  .hero h1{min-height:0}
+  .how{grid-template-columns:1fr 1fr}
+  .how li:nth-child(2){border-right:0}
+  .how li:nth-child(-n+2){border-bottom:1px solid var(--line)}
+  .vals{grid-template-columns:1fr}
+  .val,.val+.val{padding:28px 0;border-left:0;border-bottom:1px solid var(--line-2)}
+}
+@media (max-width:640px){
+  section{padding:80px 0}
+  .hero{padding:110px 0 70px}
+  .nav-r .hide{display:none}
+  .sub{font-size:17px}
+  .b-row{grid-template-columns:92px 1fr 64px;gap:10px}
+  .b-row .nm small{display:none}
+  .how{grid-template-columns:1fr}
+  .how li{border-right:0;border-bottom:1px solid var(--line)}
+  .how li:last-child{border-bottom:0}
+  .mh,.mb dl{grid-template-columns:1fr;gap:2px}
+  .mb dd{margin-bottom:10px}
+  .lines li{font-size:17px}
+  .cta{padding:32px 22px;border-radius:18px}
+  .vs{left:8px;right:8px;justify-content:center}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*:before,*:after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+
+<nav id="nav"><div class="wrap">
+  <a class="wordmark" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 4h3v3h2V4h4v3h2V4h3v6H5zM7 11h10v11H7z"/></svg>Night's Watch</a>
+  <div class="nav-r">
+    <a class="hide" href="#problem">Problem</a>
+    <a class="hide" href="#how">How it works</a>
+    <a class="btn" href="#contact">Get in touch</a>
+  </div>
+</div></nav>
+
+<header class="hero">
+  <div class="paper-grid" aria-hidden="true"></div>
+  <div class="wrap">
+    <div>
+      <div class="tag"><span class="dot"></span>A status page for your vendors</div>
+      <h1><span id="q">Who is handling your company's data this month?</span></h1>
+      <p class="sub">Hourly checks on every vendor's sub-processor list and privacy policy. An alert the moment one breaks your data policy.</p>
+      <form class="check" id="check">
+        <input id="domain" type="text" placeholder="vendor.com" aria-label="Vendor domain" autocomplete="off" spellcheck="false">
+        <button class="btn" type="submit">Check a vendor</button>
+      </form>
+      <small>We look up its sub-processors and send you what we find.</small>
+    </div>
+
+    <div>
+      <div class="board" role="img" aria-label="Example status board. Six fictional vendors, one bar per hourly check. Green means no change; red means a change broke a rule.">
+        <div class="b-hd"><b>Acme Inc. · Vendors</b><span class="lv"><span class="dot"></span>Checked <span id="b-clock">13:00</span></span></div>
+        <div class="banner" id="banner">
+          <span class="ic"><svg class="ok" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg><svg class="no" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 2.5v4.2M6 9.3v.1"/></svg></span>
+          <div><b id="bn-t">All 6 vendors within policy</b><span id="bn-s">Nothing in the last hour breaks your rules.</span></div>
+        </div>
+        <div class="b-rows" id="b-rows"></div>
+        <div class="b-ft">
+          <span>One bar per hour</span>
+          <span class="legend"><span><i style="background:var(--ok)"></i>No change</span><span><i style="background:var(--ign)"></i>Change, ignored</span><span><i style="background:var(--bad)"></i>Broke a rule</span></span>
+        </div>
+      </div>
+      <div class="b-cap">Fictional vendors.</div>
+    </div>
+  </div>
+</header>
+
+<section id="problem">
+  <div class="wrap split">
+    <div class="reveal">
+      <div class="tag">The problem</div>
+      <h2>Your vendors have vendors.</h2>
+      <ul class="lines">
+        <li>Every vendor you use passes your data on to its own suppliers.</li>
+        <li>That list can change any day. The notice is an edit to a web page.</li>
+        <li>You find out at the next audit. Or from a customer.</li>
+      </ul>
+    </div>
+    <div class="tree reveal" id="tree">
+      <div class="th"><span>larkspur.com/legal/subprocessors</span><span>changed 25 Sep</span></div>
+      <div class="tb">
+        <ul><li><div class="ln"><b>Acme Inc.</b><em>you</em></div>
+          <ul><li><div class="ln"><span><b>Larkspur</b> <small>support desk</small></span></div>
+            <ul>
+              <li><div class="ln"><span>Amazon Web Services</span><em>Ireland</em></div></li>
+              <li><div class="ln"><span>Google Cloud</span><em>Belgium</em></div></li>
+              <li><div class="ln"><span>Twilio</span><em>United States</em></div></li>
+              <li class="add"><div class="ln"><span>+ Orbit Data Services<span class="nw">NEW</span></span><em>Brazil</em></div></li>
+              <li><div class="ln"><span>Zendesk</span><em>United States</em></div></li>
+            </ul>
+          </li>
+          <li><div class="ln"><span>Quillmail, Kestrel Pay and 3 more</span></div></li></ul>
+        </li></ul>
+      </div>
+      <div class="cap">One row added. No email sent. Fictional vendor.</div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="head reveal">
+      <div><div class="tag">How it works</div><h2>We read the pages so you don't have to.</h2></div>
+    </div>
+    <ol class="how reveal">
+      <li>
+        <div class="ill" aria-hidden="true"><div class="pg"><i style="width:80%"></i><i style="width:60%"></i><i style="width:90%"></i><i style="width:55%"></i><i style="width:75%"></i><i style="width:40%"></i><span class="sc"></span></div></div>
+        <span class="nm">01 · Read</span><p>Every hour, we read each vendor's sub-processor list and privacy policy.</p>
+      </li>
+      <li>
+        <div class="ill" aria-hidden="true"><div class="stk">
+          <div class="pg"><span>11:00</span><i></i><i style="width:60%"></i><i></i></div>
+          <div class="pg"><span>12:00</span><i></i><i style="width:60%"></i><i></i></div>
+          <div class="pg"><span>13:00</span><i></i><i style="width:60%"></i><i></i></div>
+        </div></div>
+        <span class="nm">02 · Keep</span><p>We keep every version, with the date.</p>
+      </li>
+      <li>
+        <div class="ill" aria-hidden="true">
+          <div class="pg"><i style="width:80%"></i><i style="width:60%"></i><i style="width:90%"></i><i style="width:55%"></i><i style="width:75%"></i></div>
+          <span class="neq">≠</span>
+          <div class="pg"><i style="width:80%"></i><i style="width:60%"></i><i class="r blink" style="width:85%"></i><i style="width:90%"></i><i style="width:55%"></i></div>
+        </div>
+        <span class="nm">03 · Compare</span><p>We compare it with the last one.</p>
+      </li>
+      <li>
+        <div class="ill" aria-hidden="true"><div class="nt"><b>Larkspur broke R1</b><span>New sub-processor in Brazil</span></div></div>
+        <span class="nm">04 · Alert</span><p>If a change breaks one of your rules, you get an alert.</p>
+      </li>
+    </ol>
+
+    <div class="mail reveal" role="note">
+      <dl class="mh">
+        <dt>From</dt><dd>Night's Watch</dd>
+        <dt>Subject</dt><dd><b>Larkspur broke rule R1</b></dd>
+      </dl>
+      <div class="mb">
+        <div class="tt">Larkspur broke rule R1</div>
+        <dl>
+          <dt>What</dt><dd>Added <b>Orbit Data Services (Brazil)</b> as a sub-processor</dd>
+          <dt>Rule</dt><dd>R1: company data stays in the EU or an approved country</dd>
+          <dt>Notice</dt><dd>None received. GDPR Article 28 requires one, with time to object.</dd>
+          <dt>Proof</dt><dd><span class="pf">Page as it was on 25 Sep, 13:00</span></dd>
+        </dl>
+      </div>
+    </div>
+    <div class="mail-cap">Example alert. Fictional vendor.</div>
+  </div>
+</section>
+
+<section id="value">
+  <div class="wrap">
+    <div class="reveal"><div class="tag">What you get</div><h2>Rules in your words.<br>Proof with every alert.</h2></div>
+    <div class="vals">
+      <div class="val reveal">
+        <div class="vv"><div class="rules">
+          <div><code>R1</code><mark>Company data stays in the EU.</mark></div>
+          <div><code>R2</code><span>No vendor trains AI on our data.</span></div>
+          <div><code>R3</code><span>We keep data 90 days or less.</span></div>
+        </div></div>
+        <h3>Your rules, in plain words</h3><p>"Company data stays in the EU." That is a rule. Add as many as you need.</p>
+      </div>
+      <div class="val reveal">
+        <div class="vv"><div class="stamp">Page captured<b>25 Sep · 13:00</b>larkspur.com</div></div>
+        <h3>Proof for every alert</h3><p>The page as it was, with the date. Ready to send to the vendor.</p>
+      </div>
+      <div class="val reveal">
+        <div class="vv"><div class="mini" aria-hidden="true">
+          <div class="r"><i></i><b>Larkspur</b><span>Brazil</span></div>
+          <div><i></i><b>Quillmail</b><span>EU</span></div>
+          <div><i></i><b>Kestrel Pay</b><span>EU</span></div>
+          <div><i></i><b>Hollowbase</b><span>EU</span></div>
+        </div></div>
+        <h3>One list, always current</h3><p>Every vendor, where your data sits, green or red.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contact" style="padding-top:40px">
+  <div class="wrap">
+    <div class="cta reveal">
+      <div>
+        <div class="tag">Get in touch</div>
+        <h2>Send us one vendor. We check it.</h2>
+        <p class="muted">You get the result within a day.</p>
+      </div>
+      <form class="lead" id="lead" novalidate>
+        <label for="name">Name</label>
+        <input id="name" name="name" type="text" required autocomplete="name">
+        <label for="email">Work email</label>
+        <input id="email" name="email" type="email" required autocomplete="email">
+        <label for="vendor">Vendor to check first <em>(optional)</em></label>
+        <input id="vendor" name="vendor" type="text" placeholder="vendor.com" autocomplete="off" spellcheck="false">
+        <button class="btn" type="submit">Send</button>
+        <small>We use this to reply to you and for nothing else.</small>
+        <div class="thanks" id="thanks">Thanks. We will reply within a day.</div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer><div class="wrap">
+  <span>Built at the Long Horizon Agents Hackathon, San Francisco, September 2026.</span>
+  <span>Runs on Nimble, RawTree, Liquid AI and AWS Bedrock.</span>
+</div></footer>
+
+<!-- Draft: an alternative design kept for reference. The live page is ../index.html -->
+<div class="vs"><a href="../index.html">Live page</a><a href="v1-console.html">V1 Console</a><a href="v2-status.html" aria-current="page">V2 Status</a></div>
+
+<script>
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+(function(){
+  const nav=document.getElementById('nav');
+  const on=()=>nav.classList.toggle('scrolled',scrollY>20);
+  addEventListener('scroll',on,{passive:true}); on();
+})();
+
+(function(){
+  const els=document.querySelectorAll('.reveal');
+  if(reduce||!('IntersectionObserver' in window)){els.forEach(e=>e.classList.add('in'));return;}
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}}),{threshold:.2});
+  els.forEach(e=>io.observe(e));
+})();
+
+// Status board: one bar per hourly check. A new hour arrives every 0.9 s.
+// Two scripted events per cycle; the rest is "no change" with the odd ignored change.
+(function(){
+  const V=[['Larkspur','Support desk'],['Quillmail','Email'],['Kestrel Pay','Payments'],['Hollowbase','Database'],['Birchline','HR'],['Wrenly','Analytics']];
+  const EV={
+    5:{i:0,rule:'R1',m:'Larkspur added Orbit Data Services (Brazil). Breaks R1: company data stays in the EU.'},
+    19:{i:1,rule:'R2',m:'Quillmail now allows AI training on customer data. Breaks R2.'}
+  };
+  const CYCLE=60, rowsEl=document.getElementById('b-rows'), clock=document.getElementById('b-clock'),
+        banner=document.getElementById('banner'), bt=document.getElementById('bn-t'), bs=document.getElementById('bn-s');
+  const N=rowsEl.getBoundingClientRect().width<420?20:32;
+  const noise=(t,i)=>{const x=Math.sin((t*7+i*13)*12.9898)*43758.5453;return (x-Math.floor(x))<.07?'g':''};
+  const hh=t=>String(((t%24)+24)%24).padStart(2,'0')+':00';
+  const label={'':'No change',g:'Only formatting or dates changed. Ignored.',x:'Broke a rule'};
+  let t=60, last=null;
+  const R=V.map(([n,w],i)=>{
+    const r=document.createElement('div'); r.className='b-row';
+    r.innerHTML=`<div class="nm"><b>${n}</b><small>${w}</small></div><div class="bars"></div><span class="s">OK</span>`;
+    rowsEl.appendChild(r);
+    const bars=r.querySelector('.bars'), hist=[];
+    for(let k=N-1;k>=0;k--){const kd=noise(t-k,i);hist.push({k:kd});const b=document.createElement('i');if(kd)b.className=kd;b.title=hh(t-k)+' · '+label[kd];bars.appendChild(b);}
+    return {el:r,bars,hist,s:r.querySelector('.s'),rule:null};
+  });
+  function paint(){
+    let bad=R.filter(r=>r.hist.some(h=>h.k==='x'));
+    R.forEach(r=>{const x=r.hist.find(h=>h.k==='x');r.el.classList.toggle('bad',!!x);r.s.textContent=x?'Broke '+x.rule:'OK';});
+    banner.classList.toggle('bad',bad.length>0);
+    if(bad.length){bt.textContent=bad.length+(bad.length>1?' vendors broke a rule':' vendor broke a rule');bs.textContent=last?last.m:'';}
+    else{bt.textContent='All 6 vendors within policy';bs.textContent='Nothing in the last hour breaks your rules.';last=null;}
+    clock.textContent=hh(t);
+  }
+  function step(animate){
+    t++; const e=EV[t%CYCLE];
+    R.forEach((r,i)=>{
+      const kd=(e&&e.i===i)?'x':noise(t,i);
+      r.hist.push({k:kd,rule:e&&e.i===i?e.rule:null}); r.hist.shift();
+      r.bars.firstElementChild.remove();
+      const b=document.createElement('i'); b.className=(kd||'')+(animate?' new':''); b.title=hh(t)+' · '+(kd==='x'?e.m:label[kd]);
+      r.bars.appendChild(b);
+      if(kd==='x'){last=e; if(animate){r.el.classList.remove('flash');void r.el.offsetWidth;r.el.classList.add('flash');}}
+    });
+    paint();
+  }
+  paint();
+  if(reduce){for(let k=0;k<6;k++)step(false);return;}
+  setInterval(()=>step(true),900);
+})();
+
+(function(){
+  const el=document.getElementById('q'); if(reduce) return;
+  const qs=["Who is handling your company's data this month?","Which vendor added a sub‑processor last week?","Did a vendor just allow AI training on your data?","Where did your company's data go this quarter?"];
+  let i=0;
+  setInterval(()=>{el.classList.add('out');setTimeout(()=>{i=(i+1)%qs.length;el.textContent=qs[i];el.classList.remove('out');},400);},5200);
+})();
+
+document.getElementById('check').addEventListener('submit',e=>{
+  e.preventDefault();
+  const d=document.getElementById('domain').value.trim();
+  if(d) document.getElementById('vendor').value=d;
+  document.getElementById('contact').scrollIntoView({behavior:'smooth'});
+  setTimeout(()=>document.getElementById('name').focus({preventScroll:true}),700);
+});
+
+// Contact form. TODO wire to a backend (RawTree nw_leads table or a mail relay).
+document.getElementById('lead').addEventListener('submit',e=>{
+  e.preventDefault();
+  const f=e.target;
+  if(!f.name.value.trim()||!f.email.validity.valid){f.reportValidity();return;}
+  [...f.querySelectorAll('label,input,button,small')].forEach(el=>el.style.display='none');
+  document.getElementById('thanks').style.display='block';
+});
+</script>
+</body>
+</html>
