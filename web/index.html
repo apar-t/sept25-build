@@ -149,6 +149,8 @@ label em{font-style:normal;text-transform:none;letter-spacing:0}
 .lead .btn{margin-top:24px;width:100%;padding:14px}
 .lead small{display:block;color:var(--ink-3);font-size:12px;margin-top:14px;text-align:center}
 .thanks{display:none;text-align:center;padding:24px 0;font:500 20px var(--sans)}
+.lead .err{color:var(--red);font-size:13px;margin:12px 0 0;text-align:center}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 
 footer{border-top:1px solid var(--line);padding:32px 0;color:var(--ink-3);font-size:13px}
 footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
@@ -336,7 +338,9 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
       <input id="email" name="email" type="email" required autocomplete="email">
       <label for="msg">Message <em>(optional)</em></label>
       <textarea id="msg" name="message" rows="4"></textarea>
+      <div class="hp" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
       <button class="btn" type="submit">Send</button>
+      <p class="err" id="lead-err" role="alert" hidden>Could not send. Please try again in a minute.</p>
       <small>We use this to reply to you and for nothing else.</small>
       <div class="thanks" id="thanks">Thanks. We will reply within a day.</div>
     </form>
@@ -516,13 +520,19 @@ function seed(i){const x=Math.sin(i*127.1)*43758.5;return x-Math.floor(x)}
   setInterval(()=>{el.classList.add('out');setTimeout(()=>{i=(i+1)%qs.length;el.innerHTML=qs[i];el.classList.remove('out');},600);},5600);
 })();
 
-// Contact form. TODO wire to a backend (RawTree nw_leads table or a mail relay).
-document.getElementById('lead').addEventListener('submit',e=>{
+// Contact form: posts to the Worker in contact-worker/, which commits each submission to a private repo.
+const CONTACT_URL='https://nights-watch-contact.venkatsr12.workers.dev';
+document.getElementById('lead').addEventListener('submit',async e=>{
   e.preventDefault();
-  const f=e.target;
-  if(!f.name.value.trim()||!f.email.validity.valid){f.reportValidity();return;}
-  [...f.querySelectorAll('label,input,textarea,button,small')].forEach(el=>el.style.display='none');
-  document.getElementById('thanks').style.display='block';
+  const f=e.target, btn=f.querySelector('button'), err=document.getElementById('lead-err'), v=id=>document.getElementById(id).value.trim();
+  if(!v('name')||!document.getElementById('email').validity.valid){f.reportValidity();return;}
+  btn.disabled=true; btn.textContent='Sending…'; err.hidden=true;
+  try{
+    const r=await fetch(CONTACT_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:v('name'),email:v('email'),message:v('msg'),website:v('website')})});
+    if(!r.ok) throw new Error(r.status);
+    [...f.querySelectorAll('label,input,textarea,button,small')].forEach(el=>el.style.display='none');
+    document.getElementById('thanks').style.display='block';
+  }catch(_){btn.disabled=false; btn.textContent='Send'; err.hidden=false;}
 });
 </script>
 </body>

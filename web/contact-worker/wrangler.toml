@@ -1,0 +1,8 @@
+name = "nights-watch-contact"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+GITHUB_REPO = "vroy2008/nights-watch-contacts"
+GITHUB_API = "https://api.github.com"
+ALLOWED_ORIGINS = "https://vroy2008.github.io,http://localhost:8780"
