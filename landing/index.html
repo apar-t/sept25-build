@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night's Watch</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23ffffff%27 d=%27M5 4h3v3h2V4h4v3h2V4h3v6H5zM7 11h10v11H7z%27/%3E%3C/svg%3E">
+<meta name="description" content="Night's Watch reads your vendors' sub-processor pages and privacy policies every hour, keeps every version, and tells you when a change breaks your data policy.">
+<style>
+:root{
+  --bg:#0d0d0f; --surface:#141417; --surface-2:#1b1b1f; --line:#26262b; --line-2:#333339;
+  --ink:#f2f2f0; --ink-2:#a9a9a4; --ink-3:#6f6f6b;
+  --red:#e66767; --red-bg:#2c1717; --green:#5fb35f; --amber:#d9a441;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+section{padding:120px 0}
+h2{font-size:38px;line-height:1.15;letter-spacing:-.02em;margin:0 0 16px;font-weight:600}
+p{margin:0 0 14px}
+.muted{color:var(--ink-2)}
+.eyebrow{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-bottom:18px}
+.btn{display:inline-block;background:var(--ink);color:var(--bg);text-decoration:none;font-weight:600;padding:13px 22px;border-radius:8px;border:0;font-size:16px;cursor:pointer}
+.btn:hover{background:#fff}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px}
+
+/* nav */
+nav{position:absolute;top:0;left:0;right:0;z-index:2}
+nav .wrap{display:flex;justify-content:space-between;align-items:center;height:64px}
+.wordmark{font-weight:700;letter-spacing:-.01em;text-decoration:none;font-size:20px;display:flex;align-items:center;gap:10px}
+.wordmark svg{width:22px;height:22px;display:block}
+nav a.link{color:var(--ink-2);text-decoration:none;font-size:17px}
+nav a.link:hover{color:var(--ink)}
+
+/* hero */
+.hero{position:relative;min-height:min(92vh,860px);display:flex;align-items:center;padding:110px 0 90px;overflow:hidden}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hero .veil{position:absolute;inset:0;background:radial-gradient(ellipse 46% 42% at 50% 50%,rgba(13,13,15,.82),rgba(13,13,15,.35) 60%,transparent 100%);pointer-events:none}
+.hero .wrap{position:relative;text-align:center;max-width:900px}
+.hero h1{font-size:clamp(40px,6.2vw,66px);line-height:1.05;letter-spacing:-.03em;margin:0 0 22px;font-weight:600;min-height:2.1em;display:flex;align-items:center;justify-content:center}
+.hero h1 span{display:block;transition:opacity .45s ease}
+.hero h1 span.out{opacity:0}
+.hero p{font-size:19px;color:var(--ink-2);max-width:600px;margin:0 auto 30px}
+.check{display:flex;max-width:520px;margin:0 auto;background:var(--surface);border:1px solid var(--line-2);border-radius:10px;padding:5px;gap:6px}
+.check input{border:0;background:transparent;font-size:16px;padding:10px 14px;font-family:var(--mono);flex:1;min-width:0}
+.check input:focus{outline:none}
+.check .btn{white-space:nowrap;padding:11px 18px}
+.hero small{display:block;color:var(--ink-3);font-size:13px;margin-top:12px}
+.hero:after{content:"";position:absolute;inset:auto 0 0 0;height:140px;background:linear-gradient(transparent,var(--bg));pointer-events:none}
+
+/* problem */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
+.diff{padding:0;overflow:hidden;font-family:var(--mono);font-size:13px}
+.diff .hd{display:flex;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);color:var(--ink-3);font-size:12px}
+.diff table{width:100%;border-collapse:collapse}
+.diff td{padding:10px 16px;border-bottom:1px solid var(--line);color:var(--ink-2)}
+.diff tr:last-child td{border-bottom:0}
+.diff td:last-child{text-align:right;color:var(--ink-3)}
+.diff tr.add td{background:var(--red-bg);color:var(--ink)}
+.diff tr.add td:first-child:before{content:"+ ";color:var(--red)}
+.diff .cap{padding:10px 16px;color:var(--ink-3);font-size:12px;border-top:1px solid var(--line)}
+
+/* lists */
+.lines,.steps{list-style:none;margin:0;padding:0}
+.lines li{font-size:19px;color:var(--ink-2);padding:12px 0;border-top:1px solid var(--line)}
+.lines li:last-child{border-bottom:1px solid var(--line)}
+.steps li{display:flex;gap:16px;font-size:18px;color:var(--ink-2);padding:12px 0;border-top:1px solid var(--line)}
+.steps li:last-child{border-bottom:1px solid var(--line)}
+.steps li span{font:600 12px/1.9 var(--mono);color:var(--ink-3);flex:0 0 26px;padding-top:2px}
+
+/* alert */
+.alert{border:1px solid var(--red);background:var(--red-bg);border-radius:12px;padding:22px 24px}
+.alert .t{display:flex;gap:10px;align-items:center;font-weight:600;font-size:18px;margin-bottom:14px}
+.alert .dot{width:10px;height:10px;border-radius:50%;background:var(--red);display:inline-block;flex:0 0 10px}
+.alert .rows{display:grid;grid-template-columns:64px 1fr;gap:10px 14px;font-size:15px;color:var(--ink-2)}
+.alert .rows b{color:var(--ink);font-weight:500}
+.alert .rows .k{font-family:var(--mono);font-size:12px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;padding-top:3px}
+.alert .cap{color:var(--ink-3);font-size:12px;margin-top:16px}
+
+/* value */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:40px}
+.feat{padding:22px}
+.feat h3{margin:0 0 8px;font-size:17px}
+.feat p{font-size:15px;color:var(--ink-2);margin:0}
+
+/* contact */
+.contact .card{max-width:520px;margin:44px auto 0;padding:30px}
+label{display:block;font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin:18px 0 8px}
+input{width:100%;background:var(--bg);border:1px solid var(--line-2);border-radius:6px;color:var(--ink);padding:12px 14px;font-size:15px;font-family:inherit}
+input:focus{outline:none;border-color:var(--ink-2)}
+.contact .btn{margin-top:24px;width:100%}
+.contact small{display:block;color:var(--ink-3);font-size:12px;margin-top:14px;text-align:center}
+.thanks{display:none;text-align:center;padding:20px 0}
+
+footer{border-top:1px solid var(--line);padding:32px 0;color:var(--ink-3);font-size:13px}
+footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+
+@media (max-width:820px){
+  section{padding:80px 0}
+  h2{font-size:30px}
+  .split,.grid3{grid-template-columns:1fr;gap:28px}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <a class="wordmark" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 4h3v3h2V4h4v3h2V4h3v6H5zM7 11h10v11H7z"/></svg>Night's Watch</a>
+  <a class="link" href="#contact">Get in touch</a>
+</div></nav>
+
+<header class="hero">
+  <canvas id="graph" aria-hidden="true"></canvas>
+  <div class="veil" aria-hidden="true"></div>
+  <div class="wrap">
+    <h1><span id="q">Who is handling your company's data this month?</span></h1>
+    <p>Hourly checks on every vendor's sub-processor list and privacy policy. An alert the moment one breaks your data policy.</p>
+    <form class="check" id="check">
+      <input id="domain" type="text" placeholder="vendor.com" aria-label="Vendor domain" autocomplete="off" spellcheck="false">
+      <button class="btn" type="submit">Check a vendor</button>
+    </form>
+    <small>We look up its sub-processors and send you what we find.</small>
+  </div>
+</header>
+
+<section id="problem">
+  <div class="wrap split">
+    <div>
+      <div class="eyebrow">The problem</div>
+      <h2>Your vendors have vendors.</h2>
+      <ul class="lines">
+        <li>Every vendor you use passes your data on to its own suppliers.</li>
+        <li>That list can change any day. The notice is an edit to a web page.</li>
+        <li>You find out at the next audit. Or from a customer.</li>
+      </ul>
+    </div>
+    <div class="card diff">
+      <div class="hd"><span>larkspur.com/legal/subprocessors</span><span>changed 25 Sep</span></div>
+      <table>
+        <tr><td>Amazon Web Services</td><td>Ireland</td></tr>
+        <tr><td>Google Cloud</td><td>Belgium</td></tr>
+        <tr><td>Twilio</td><td>United States</td></tr>
+        <tr class="add"><td>Orbit Data Services</td><td>Brazil</td></tr>
+        <tr><td>Zendesk</td><td>United States</td></tr>
+      </table>
+      <div class="cap">One row added. No email sent. Fictional vendor.</div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap split">
+    <div>
+      <div class="eyebrow">How it works</div>
+      <h2>We read the pages so you don't have to.</h2>
+      <ol class="steps">
+        <li><span>01</span>Every hour, we read each vendor's sub-processor list and privacy policy.</li>
+        <li><span>02</span>We keep every version, with the date.</li>
+        <li><span>03</span>We compare it with the last one.</li>
+        <li><span>04</span>If a change breaks one of your rules, you get an alert.</li>
+      </ol>
+    </div>
+    <div class="alert" role="note">
+      <div class="t"><span class="dot"></span>Larkspur broke rule R1</div>
+      <div class="rows">
+        <div class="k">What</div><div>Added <b>Orbit Data Services (Brazil)</b> as a sub-processor</div>
+        <div class="k">Rule</div><div>R1: company data stays in the EU or an approved country</div>
+        <div class="k">Notice</div><div>None received. GDPR Article 28 requires one, with time to object.</div>
+        <div class="k">Proof</div><div>Page as it was on 25 Sep, 13:00</div>
+      </div>
+      <div class="cap">Example alert. Fictional vendor.</div>
+    </div>
+  </div>
+</section>
+
+<section id="value">
+  <div class="wrap">
+    <div class="eyebrow">What you get</div>
+    <h2>Rules in your words. Proof with every alert.</h2>
+    <div class="grid3">
+      <div class="card feat">
+        <h3>Your rules, in plain words</h3>
+        <p>"Company data stays in the EU." That is a rule. Add as many as you need.</p>
+      </div>
+      <div class="card feat">
+        <h3>Proof for every alert</h3>
+        <p>The page as it was, with the date. Ready to send to the vendor.</p>
+      </div>
+      <div class="card feat">
+        <h3>One list, always current</h3>
+        <p>Every vendor, where your data sits, green or red.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contact" class="contact">
+  <div class="wrap">
+    <div style="text-align:center;max-width:560px;margin:0 auto">
+      <div class="eyebrow">Get in touch</div>
+      <h2>Send us one vendor. We check it.</h2>
+      <p class="muted">You get the result within a day.</p>
+    </div>
+    <form class="card" id="lead" novalidate>
+      <label for="name">Name</label>
+      <input id="name" name="name" type="text" required autocomplete="name">
+      <label for="email">Work email</label>
+      <input id="email" name="email" type="email" required autocomplete="email">
+      <label for="vendor">Vendor to check first <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+      <input id="vendor" name="vendor" type="text" placeholder="vendor.com" autocomplete="off" spellcheck="false">
+      <button class="btn" type="submit">Send</button>
+      <small>We use this to reply to you and for nothing else.</small>
+      <div class="thanks" id="thanks">Thanks. We will reply within a day.</div>
+    </form>
+  </div>
+</section>
+
+<footer><div class="wrap">
+  <span>Built at the Long Horizon Agents Hackathon, San Francisco, September 2026.</span>
+  <span>Runs on Nimble, RawTree, Liquid AI and AWS Bedrock.</span>
+</div></footer>
+
+<script>
+// Hero: supply-chain graph. Data flows outward from you to vendors to sub-processors.
+// Now and then a sub-processor changes: it flashes red and an alert travels back to the centre.
+(function(){
+  const c=document.getElementById('graph'), ctx=c.getContext('2d');
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const RED=[230,103,103];
+  let W,H,S,nodes=[],edges=[],parts=[],alerts=[],last=0,nextAlert=2.5,clock=0;
+  function seed(i){const x=Math.sin(i*127.1)*43758.5;return x-Math.floor(x)}
+  function build(){
+    S=devicePixelRatio||1;
+    W=c.width=Math.floor(c.offsetWidth*S); H=c.height=Math.floor(c.offsetHeight*S);
+    nodes=[];edges=[];parts=[];alerts=[];
+    const cx=W/2, cy=H/2;
+    nodes.push({x:cx,y:cy,r:5*S,k:0});
+    const V=7, rx=W*0.24, ry=H*0.30;
+    for(let i=0;i<V;i++){
+      const a=(i/V)*Math.PI*2-Math.PI/2+0.25;
+      const x=cx+Math.cos(a)*rx, y=cy+Math.sin(a)*ry;
+      nodes.push({x,y,ox:x,oy:y,r:3.4*S,k:1,ph:seed(i)*6.28,sp:0.25});
+      const vi=nodes.length-1; edges.push({a:0,b:vi,len:Math.hypot(x-cx,y-cy)});
+      const n=4+Math.floor(seed(i+40)*3);
+      for(let j=0;j<n;j++){
+        const b2=a+(j-(n-1)/2)*0.26+(seed(i*9+j)-0.5)*0.12;
+        const f=1.75+seed(i*13+j)*0.55;
+        const x2=cx+Math.cos(b2)*rx*f, y2=cy+Math.sin(b2)*ry*f;
+        nodes.push({x:x2,y:y2,ox:x2,oy:y2,r:2.1*S,k:2,ph:seed(i*31+j)*6.28,sp:0.35+seed(i*7+j)*0.4,parent:vi,hot:0});
+        edges.push({a:vi,b:nodes.length-1,len:Math.hypot(x2-x,y2-y)});
+      }
+    }
+    // seed particles along every edge
+    edges.forEach((e,ei)=>{const n=e.a===0?2:1;for(let k=0;k<n;k++)parts.push({e:ei,t:seed(ei*3+k),v:0.09+seed(ei+k*5)*0.06,red:false})});
+  }
+  function pos(e,t){const A=nodes[e.a],B=nodes[e.b];return [A.x+(B.x-A.x)*t, A.y+(B.y-A.y)*t]}
+  function frame(now){
+    const dt=Math.min(0.05,(now-last)/1000||0); last=now; clock+=dt;
+    ctx.clearRect(0,0,W,H);
+    // drift
+    if(!reduce) nodes.forEach(n=>{ if(n.k>0){ n.x=n.ox+Math.sin(clock*n.sp+n.ph)*(n.k===2?7:3)*S; n.y=n.oy+Math.cos(clock*n.sp*0.8+n.ph)*(n.k===2?6:3)*S; }});
+    // schedule alerts: pick a leaf, flash it, send a red particle back to centre
+    if(!reduce && clock>nextAlert){
+      nextAlert=clock+5+Math.random()*3;
+      const leaves=nodes.map((n,i)=>n.k===2?i:-1).filter(i=>i>=0);
+      const li=leaves[Math.floor(Math.random()*leaves.length)];
+      nodes[li].hot=1;
+      const leg1=edges.findIndex(e=>e.b===li), leg2=edges.findIndex(e=>e.b===nodes[li].parent);
+      alerts.push({legs:[leg1,leg2],i:0,t:1,v:0.35,ring:0});
+    }
+    // edges
+    ctx.lineWidth=1*S;
+    edges.forEach(e=>{
+      const B=nodes[e.b], hot=B.hot||0;
+      ctx.strokeStyle=hot>0?`rgba(${RED},${0.1+hot*0.5})`:'rgba(255,255,255,0.075)';
+      ctx.beginPath();ctx.moveTo(nodes[e.a].x,nodes[e.a].y);ctx.lineTo(B.x,B.y);ctx.stroke();
+    });
+    // outward data particles
+    parts.forEach(p=>{
+      if(!reduce){p.t+=p.v*dt*(60/Math.max(30,edges[p.e].len/S)); if(p.t>1)p.t-=1;}
+      const [x,y]=pos(edges[p.e],p.t), fade=Math.sin(p.t*Math.PI);
+      ctx.beginPath();ctx.arc(x,y,1.5*S,0,6.28);ctx.fillStyle=`rgba(255,255,255,${0.12+fade*0.45})`;ctx.fill();
+    });
+    // alert particles travelling inward (t goes 1 -> 0 along each leg)
+    alerts.forEach(al=>{
+      if(al.i<al.legs.length){
+        al.t-=al.v*dt*1.6; if(al.t<=0){al.i++;al.t=1;}
+        if(al.i<al.legs.length){
+          const [x,y]=pos(edges[al.legs[al.i]],al.t);
+          ctx.beginPath();ctx.arc(x,y,2.6*S,0,6.28);ctx.fillStyle=`rgba(${RED},0.95)`;ctx.fill();
+          ctx.beginPath();ctx.arc(x,y,7*S,0,6.28);ctx.fillStyle=`rgba(${RED},0.18)`;ctx.fill();
+        }
+      } else { al.ring+=dt; }
+    });
+    for(let i=alerts.length-1;i>=0;i--) if(alerts[i].ring>1.8) alerts.splice(i,1);
+    // nodes
+    nodes.forEach(n=>{
+      if(n.hot>0){n.hot=Math.max(0,n.hot-dt*0.18);}
+      const h=n.hot||0;
+      ctx.beginPath();ctx.arc(n.x,n.y,n.r*(1+h*0.5),0,6.28);
+      ctx.fillStyle=h>0?`rgba(${RED},${0.3+h*0.7})`:(n.k===0?'rgba(255,255,255,0.7)':n.k===1?'rgba(255,255,255,0.35)':'rgba(255,255,255,0.2)');
+      ctx.fill();
+      if(h>0.6){ctx.beginPath();ctx.arc(n.x,n.y,n.r+18*S*(1-h)/0.4,0,6.28);ctx.strokeStyle=`rgba(${RED},${(h-0.6)*1.2})`;ctx.stroke();}
+    });
+    // centre ring when an alert lands
+    alerts.forEach(al=>{ if(al.ring>0){const k=al.ring/1.8; ctx.beginPath();ctx.arc(nodes[0].x,nodes[0].y,6*S+k*34*S,0,6.28);ctx.strokeStyle=`rgba(${RED},${(1-k)*0.6})`;ctx.lineWidth=1.5*S;ctx.stroke();ctx.lineWidth=1*S;} });
+    if(!reduce) requestAnimationFrame(frame);
+  }
+  build(); requestAnimationFrame(frame);
+  let rt; addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{build(); if(reduce) requestAnimationFrame(frame);},150)});
+})();
+
+// Hero: rotate the question.
+(function(){
+  const el=document.getElementById('q');
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const qs=[
+    "Who is handling your company's data this month?",
+    "Which vendor added a sub-processor last week?",
+    "Did a vendor just allow AI training on your data?",
+    "Where did your company's data go this quarter?"
+  ];
+  let i=0;
+  setInterval(()=>{ el.classList.add('out'); setTimeout(()=>{ i=(i+1)%qs.length; el.textContent=qs[i]; el.classList.remove('out'); },450); },5200);
+})();
+
+// Hero check box: carries the domain down to the contact form for now.
+document.getElementById('check').addEventListener('submit',e=>{
+  e.preventDefault();
+  const d=document.getElementById('domain').value.trim();
+  if(d) document.getElementById('vendor').value=d;
+  document.getElementById('contact').scrollIntoView({behavior:'smooth'});
+  setTimeout(()=>document.getElementById('name').focus({preventScroll:true}),700);
+});
+
+// Contact form. TODO wire to a backend (RawTree nw_leads table or a mail relay).
+document.getElementById('lead').addEventListener('submit',e=>{
+  e.preventDefault();
+  const f=e.target;
+  if(!f.name.value.trim()||!f.email.validity.valid){ f.reportValidity(); return; }
+  [...f.querySelectorAll('label,input,button,small')].forEach(el=>el.style.display='none');
+  document.getElementById('thanks').style.display='block';
+});
+</script>
+</body>
+</html>
