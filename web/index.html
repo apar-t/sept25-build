@@ -51,21 +51,15 @@ nav .wrap{display:flex;justify-content:space-between;align-items:center;height:6
 .hero{position:relative;padding:150px 0 120px;overflow:hidden;background:radial-gradient(ellipse 80% 50% at 70% 110%,rgba(95,180,255,.16),transparent 70%),linear-gradient(180deg,#03060e,var(--bg) 60%)}
 #sky{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .hero:after{content:"";position:absolute;left:0;right:0;bottom:0;height:180px;background:linear-gradient(transparent,var(--bg));pointer-events:none}
-.hero .wrap{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 500px;gap:48px;align-items:center}
+.hero .wrap{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 460px;gap:56px;align-items:center}
 .watch{display:inline-flex;align-items:center;gap:10px;font:500 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);margin-bottom:26px}
 .watch i{width:7px;height:7px;border-radius:50%;background:var(--ice);box-shadow:0 0 10px var(--ice);animation:pulse 2.4s infinite}
 @keyframes pulse{50%{opacity:.3}}
-.hero h1{position:relative;font:600 54px/1.05 var(--sans);letter-spacing:-.04em;margin:0 0 24px;min-height:3.12em;display:flex;align-items:flex-end;text-wrap:balance}
+.hero h1{position:relative;font:600 60px/1.04 var(--sans);letter-spacing:-.04em;margin:0 0 24px;min-height:3.12em;display:flex;align-items:flex-end;text-wrap:balance}
 .hero h1 span{display:block;transition:opacity .6s,filter .6s}
 .hero h1 span.out{opacity:0;filter:blur(10px)}
-.sub{font-size:18.5px;color:var(--ink-2);max-width:500px;margin:0 0 32px}
-.check{display:flex;max-width:470px;background:rgba(14,22,40,.6);border:1px solid var(--line-2);border-radius:999px;padding:5px;gap:6px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:border-color .2s,box-shadow .2s}
-.check:focus-within{border-color:rgba(159,216,255,.5);box-shadow:0 0 0 4px rgba(159,216,255,.08)}
-.check input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:15px var(--mono);padding:10px 16px}
-.check input:focus{outline:none}
-.check input::placeholder{color:var(--ink-3)}
-.hero small{display:block;color:var(--ink-3);font-size:13px;margin:12px 0 0 18px}
-.radar-box{position:relative;width:500px;max-width:100%;justify-self:end}
+.sub{font-size:20px;color:var(--ink-2);max-width:580px;margin:0}
+.radar-box{position:relative;width:460px;max-width:100%;justify-self:end}
 #radar{display:block;width:100%;aspect-ratio:1}
 .readout{position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;width:330px;max-width:calc(100% - 16px);padding:11px 18px 11px 14px;border-radius:14px;font-size:13.5px;line-height:1.35;transition:border-color .4s,background .4s,box-shadow .4s}
 .readout i{width:9px;height:9px;border-radius:50%;background:var(--ice);box-shadow:0 0 10px var(--ice);flex:0 0 9px;transition:background .4s,box-shadow .4s}
@@ -83,7 +77,7 @@ nav .wrap{display:flex;justify-content:space-between;align-items:center;height:6
 .lit p{font:500 36px/1.25 var(--sans);margin:0 0 .5em;letter-spacing:-.03em}
 .lit span{color:#27324a;transition:color .35s}
 .lit span.on{color:var(--ink)}
-.diff{max-width:560px;margin:70px 0 0 auto;overflow:hidden;font:13px var(--mono);padding:0}
+.diff{max-width:560px;margin:70px auto 0;overflow:hidden;font:13px var(--mono);padding:0}
 .diff .hd{display:flex;justify-content:space-between;gap:10px;padding:13px 18px;border-bottom:1px solid var(--line);color:var(--ink-3);font-size:12px}
 .diff .hd b{color:var(--red);font-weight:400}
 .d-row{display:flex;justify-content:space-between;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);color:var(--ink-2)}
@@ -96,12 +90,13 @@ nav .wrap{display:flex;justify-content:space-between;align-items:center;height:6
 
 /* how: sticky story */
 .story{display:grid;grid-template-columns:.9fr 1.1fr;gap:64px;margin-top:40px}
-.step{min-height:500px;display:flex;flex-direction:column;justify-content:center;opacity:.25;transition:opacity .5s}
+.steps{padding:70px 0}
+.step{min-height:280px;display:flex;flex-direction:column;justify-content:center;opacity:.25;transition:opacity .5s}
 .step.on{opacity:1}
 .step>b{font:500 12px var(--mono);color:var(--ice);letter-spacing:.1em;margin-bottom:12px}
-.step>p{font:500 28px/1.25 var(--sans);letter-spacing:-.03em;margin:0;max-width:440px}
+.step>p{font:500 28px/1.25 var(--sans);letter-spacing:-.03em;margin:0;max-width:460px;text-wrap:balance}
 .step .scene-box{display:none}
-.stick{position:sticky;top:130px;height:460px}
+.stick{position:sticky;top:130px;height:420px}
 .scene-box{position:relative;height:100%;border-radius:22px;border:1px solid var(--line);background:radial-gradient(ellipse at 50% 0%,rgba(95,180,255,.1),transparent 70%),rgba(8,14,28,.6);overflow:hidden}
 .scene-box:before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(159,216,255,.1) 1px,transparent 1.2px);background-size:22px 22px;-webkit-mask-image:radial-gradient(ellipse at center,#000,transparent 75%);mask-image:radial-gradient(ellipse at center,#000,transparent 75%)}
 .scene{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:30px;opacity:0;transform:scale(.97);transition:opacity .6s,transform .6s cubic-bezier(.2,.8,.2,1);pointer-events:none}
@@ -149,9 +144,8 @@ nav .wrap{display:flex;justify-content:space-between;align-items:center;height:6
 label{display:block;font:500 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin:18px 0 8px}
 label:first-of-type{margin-top:0}
 label em{font-style:normal;text-transform:none;letter-spacing:0}
-.lead input{width:100%;background:rgba(3,6,14,.6);border:1px solid var(--line-2);border-radius:10px;color:var(--ink);padding:12px 14px;font:15px var(--sans);transition:border-color .2s,box-shadow .2s}
-.lead input#vendor{font-family:var(--mono)}
-.lead input:focus{outline:none;border-color:rgba(159,216,255,.5);box-shadow:0 0 0 4px rgba(159,216,255,.08)}
+.lead input,.lead textarea{width:100%;display:block;resize:vertical;background:rgba(3,6,14,.6);border:1px solid var(--line-2);border-radius:10px;color:var(--ink);padding:12px 14px;font:15px var(--sans);transition:border-color .2s,box-shadow .2s}
+.lead input:focus,.lead textarea:focus{outline:none;border-color:rgba(159,216,255,.5);box-shadow:0 0 0 4px rgba(159,216,255,.08)}
 .lead .btn{margin-top:24px;width:100%;padding:14px}
 .lead small{display:block;color:var(--ink-3);font-size:12px;margin-top:14px;text-align:center}
 .thanks{display:none;text-align:center;padding:24px 0;font:500 20px var(--sans)}
@@ -161,9 +155,9 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
 
 
 @media (max-width:1180px){
-  .hero .wrap{grid-template-columns:minmax(0,1fr) 440px}
-  .radar-box{width:440px}
-  .hero h1{font-size:44px}
+  .hero .wrap{grid-template-columns:minmax(0,1fr) 420px;gap:48px}
+  .radar-box{width:420px}
+  .hero h1{font-size:54px}
 }
 @media (max-width:960px){
   .hero{padding:120px 0 90px}
@@ -176,12 +170,12 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
   .cards{grid-template-columns:1fr}
   .story{grid-template-columns:minmax(0,1fr);gap:0}
   .stick{display:none}
+  .steps{padding:0}
   .step{min-height:0;opacity:1;padding:30px 0}
   .step .scene-box{display:block;height:auto;margin-top:22px}
   .step .scene{position:relative;inset:auto;opacity:1;transform:none;padding:26px 16px;flex-direction:column}
   .step .vs-chip{position:static;transform:none;margin-bottom:14px}
   .step .scene .page,.step .scene .alert{zoom:.9}
-  .diff{margin-left:0}
 }
 @media (max-width:640px){
   section{padding:84px 0}
@@ -219,11 +213,6 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
       <div class="watch"><i></i>On watch, every hour</div>
       <h1><span id="q">Who is handling your company's data this month?</span></h1>
       <p class="sub">Hourly checks on every vendor's sub-processor list and privacy policy. An alert the moment one breaks your data policy.</p>
-      <form class="check" id="check">
-        <input id="domain" type="text" placeholder="vendor.com" aria-label="Vendor domain" autocomplete="off" spellcheck="false">
-        <button class="btn" type="submit">Check a vendor</button>
-      </form>
-      <small>We look up its sub-processors and send you what we find.</small>
     </div>
     <div class="radar-box">
       <span class="radar-cap" aria-hidden="true">FICTIONAL VENDORS</span>
@@ -259,7 +248,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
 <section id="how">
   <div class="wrap">
     <div class="eyebrow">How it works</div>
-    <h2>We read the pages<br>so you don't have to.</h2>
+    <h2>We read the pages so you don't have to.</h2>
     <div class="story">
       <div class="steps">
         <div class="step on" data-i="0"><b>01</b><p>Every hour, we read each vendor's sub-processor list and privacy policy.</p></div>
@@ -313,7 +302,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
 <section id="value">
   <div class="wrap">
     <div class="eyebrow">What you get</div>
-    <h2>Rules in your words.<br><em>Proof</em> with every alert.</h2>
+    <h2>Rules in your words. <em>Proof</em> with every alert.</h2>
     <div class="cards">
       <div class="card glass reveal">
         <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M6 8h20M6 14h14M6 20h17M6 26h9"/><circle cx="26" cy="24" r="3.2"/></svg>
@@ -338,15 +327,15 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
   <div class="aur" aria-hidden="true"></div>
   <div class="wrap">
     <div class="eyebrow">Get in touch</div>
-    <h2>Send us one vendor.<br><em>We check it.</em></h2>
-    <p class="muted">You get the result within a day.</p>
+    <h2>Contact us.</h2>
+    <p class="muted">We reply within a day.</p>
     <form class="lead glass reveal" id="lead" novalidate>
       <label for="name">Name</label>
       <input id="name" name="name" type="text" required autocomplete="name">
       <label for="email">Work email</label>
       <input id="email" name="email" type="email" required autocomplete="email">
-      <label for="vendor">Vendor to check first <em>(optional)</em></label>
-      <input id="vendor" name="vendor" type="text" placeholder="vendor.com" autocomplete="off" spellcheck="false">
+      <label for="msg">Message <em>(optional)</em></label>
+      <textarea id="msg" name="message" rows="4"></textarea>
       <button class="btn" type="submit">Send</button>
       <small>We use this to reply to you and for nothing else.</small>
       <div class="thanks" id="thanks">Thanks. We will reply within a day.</div>
@@ -416,7 +405,7 @@ function seed(i){const x=Math.sin(i*127.1)*43758.5;return x-Math.floor(x)}
   function build(){
     const s=cv.clientWidth; if(s===S) return false; S=s;
     const d=Math.min(2,devicePixelRatio||1); cv.width=S*d; cv.height=S*d; ctx.setTransform(d,0,0,d,0,0);
-    C=S/2; R=S/2-18; return true;
+    C=S/2; R=Math.max(0,S/2-18); return true;
   }
   const xy=n=>[C+Math.cos(n.a)*n.f*R,C+Math.sin(n.a)*n.f*R];
   const passed=(a,step)=>{const d=((theta-a)%TAU+TAU)%TAU;return d<step};
@@ -527,20 +516,12 @@ function seed(i){const x=Math.sin(i*127.1)*43758.5;return x-Math.floor(x)}
   setInterval(()=>{el.classList.add('out');setTimeout(()=>{i=(i+1)%qs.length;el.innerHTML=qs[i];el.classList.remove('out');},600);},5600);
 })();
 
-document.getElementById('check').addEventListener('submit',e=>{
-  e.preventDefault();
-  const d=document.getElementById('domain').value.trim();
-  if(d) document.getElementById('vendor').value=d;
-  document.getElementById('contact').scrollIntoView({behavior:'smooth'});
-  setTimeout(()=>document.getElementById('name').focus({preventScroll:true}),700);
-});
-
 // Contact form. TODO wire to a backend (RawTree nw_leads table or a mail relay).
 document.getElementById('lead').addEventListener('submit',e=>{
   e.preventDefault();
   const f=e.target;
   if(!f.name.value.trim()||!f.email.validity.valid){f.reportValidity();return;}
-  [...f.querySelectorAll('label,input,button,small')].forEach(el=>el.style.display='none');
+  [...f.querySelectorAll('label,input,textarea,button,small')].forEach(el=>el.style.display='none');
   document.getElementById('thanks').style.display='block';
 });
 </script>
