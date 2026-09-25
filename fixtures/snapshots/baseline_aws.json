@@ -1,0 +1,28 @@
+{
+  "vendor": "aws",
+  "display_name": "AWS",
+  "fetched_at": "2026-09-25T12:00:00Z",
+  "source_urls": [
+    "https://example.com/aws/subprocessors"
+  ],
+  "is_demo_mirror": false,
+  "subprocessors": [
+    {
+      "name": "Example Cloud Hosting",
+      "purpose": "Infrastructure hosting",
+      "country": "Ireland"
+    },
+    {
+      "name": "Example Email Delivery",
+      "purpose": "Transactional email",
+      "country": "United States"
+    },
+    {
+      "name": "Example Support Desk",
+      "purpose": "Customer support tickets",
+      "country": "Germany"
+    }
+  ],
+  "policy_text": "# Data Processing Terms (SYNTHETIC FIXTURE)\n\nLast updated: 2026-06-01\n\n## Use of customer data\nWe process customer data only to provide the service. We do not use customer data to train machine learning or AI models.\n\n## Retention\nCustomer data is deleted within 30 days of account termination.\n\n## Sub-processors\nWe notify customers at least 30 days before adding a new sub-processor.\n",
+  "snapshot_id": "aws:2026-09-25T12:00:00+00:00"
+}

@@ -33,6 +33,28 @@ Rules:
 - RawTree database is `default`. The key can't create databases, and other people's tables already live there, so **prefix every table with `nw_`** (`nw_snapshots`, `nw_state_cards`, `nw_alerts`, `nw_ticks`).
 - Inserting into a new table creates it automatically. Queries are read-only SQL.
 
+## Lanes: who owns what (read before editing anything)
+Each person runs their own coding agent. **Agents edit only their own lane.** If your task needs a change in someone else's lane, stop and tell your human; don't edit it yourself.
+
+| Lane | Owner | Owns | Must provide to others |
+|---|---|---|---|
+| **A: ingest** | _claim: put your GitHub handle here_ | `src/sept25_build/ingest/`, `scripts/inject.py`, the demo mirror page | `ingest.run_once() -> list[Snapshot]`, written to `nw_snapshots` |
+| **B: agent** | apar-t | `src/sept25_build/agent/`, `scripts/tick.py` | `agent.run_tick()`: writes `nw_state_cards`, `nw_alerts`, `nw_ticks` |
+| **C: data + web** | _claim: put your GitHub handle here_ | `web/`, `src/sept25_build/rawtree.py`, RawTree queries/endpoints, pitch + backup video | the dashboard |
+| **Shared** | everyone | `src/sept25_build/contracts.py`, `AGENTS.md`, `docs/`, `pyproject.toml` | |
+
+- **`contracts.py` is the interface between lanes.** Import `Snapshot`, `StateCard`, `Alert`, `TickLog`, `TABLES`, `RULES` from it. Never redefine these shapes locally. Adding an optional field is fine (say so in the commit message); renaming or removing one needs the team's agreement first.
+- **Build against fixtures, not each other.** `fixtures/snapshots/` has synthetic snapshots, including a noise-only change and three injected violations (see `fixtures/README.md`). Nobody should be blocked waiting on another lane.
+- **Dependencies:** changing `pyproject.toml`/`uv.lock` conflicts easily. Pull first, add the dependency, commit it on its own, push right away.
+- **Collisions:** if `git pull --rebase` conflicts in a file outside your lane, keep the upstream (other person's) version, which during a rebase is `git checkout --ours <file>`, then tell your human what you dropped. Never force-push.
+- Commit small and often (every 30–45 min), with messages that say which lane: `B: triage prompt`.
+
+## Build rules
+- One tick = ingest (A) → agent (B) → dashboard reads (C). `uv run scripts/tick.py` runs a full tick; the demo triggers it manually, never on a timer.
+- The demo mirror is the **only** page we inject into. It must always display as "(demo mirror)"; never imply a real vendor changed its terms.
+- Keep the agent's per-tick context constant: state card + current change only. Full history stays in RawTree. This is the hackathon theme, so don't "just add the history to the prompt".
+- LLM: Liquid LFM2.5 on the local llama-server (`LFM_BASE_URL`). Bedrock is optional, only if AWS keys arrive.
+
 ## Setup
 ```bash
 brew install uv llama.cpp age

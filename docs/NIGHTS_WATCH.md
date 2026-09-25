@@ -4,6 +4,8 @@
 
 Built for the [Long Horizon Agents Hackathon](https://luma.com/horizonagentshack) (SF, 2026-09-25). Team of 3, ~4 hours of build time.
 
+> **Working with the team?** Lane ownership, the shared data contracts (`src/sept25_build/contracts.py`) and build rules live in [AGENTS.md](../AGENTS.md). Where this plan says "Tinybird", the build uses **RawTree** (a Tinybird product). The LLM is **Liquid LFM2.5** locally; Bedrock is optional if AWS keys arrive.
+
 ---
 
 ## 1. The problem
