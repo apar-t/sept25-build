@@ -1,3 +1,3 @@
 # sept25-build
 
-**Watchdog** — long-horizon vendor compliance agent. See [docs/WATCHDOG.md](docs/WATCHDOG.md).
+**Night's Watch**: long-horizon vendor compliance agent. See [docs/NIGHTS_WATCH.md](docs/NIGHTS_WATCH.md).

@@ -1,6 +1,6 @@
-# Watchdog — Long-Horizon Vendor Compliance Agent
+# Night's Watch — Long-Horizon Vendor Compliance Agent
 
-> **One-liner:** Watchdog maps a company's full data supply chain — its vendors and *their* sub-processors — and watches it for months at constant cost, flagging the moment a vendor change makes you non-compliant.
+> **One-liner:** Night's Watch maps a company's full data supply chain — its vendors and *their* sub-processors — and watches it for months at constant cost, flagging the moment a vendor change makes you non-compliant.
 
 Built for the [Long Horizon Agents Hackathon](https://luma.com/horizonagentshack) (SF, 2026-09-25). Team of 3, ~4 hours of build time.
 
@@ -16,31 +16,31 @@ So a vendor adds a sub-processor in a new country, or edits its privacy policy t
 
 The hackathon theme: long-horizon agents break down as observations, actions, and stale context pile up. The call is for *"explicit mutable state instead of ever-growing histories, agents that edit their own working context, and a clear split between what needs to persist and what can be discarded."*
 
-Watchdog is that architecture applied to a real workload:
+Night's Watch is that architecture applied to a real workload:
 
-| Theme requirement | Watchdog |
+| Theme requirement | Night's Watch |
 |---|---|
 | Explicit mutable state | Each vendor has a small **state card** (~1–2k tokens) that the agent **rewrites** every tick — never appends to |
 | Discard what doesn't matter | **Liquid** triages every snapshot; cosmetic changes (dates, formatting) are dropped |
 | Persist what matters | Full raw history lives in **Tinybird**, outside the model's context; only material changes update the card |
 | Reliable from minutes → months | Context per tick = state card + current diff. **Tokens per tick stay flat** while a naive history-appending agent grows without bound |
 
-**Headline chart:** tokens per tick — Watchdog (flat) vs. naive baseline (growing).
+**Headline chart:** tokens per tick — Night's Watch (flat) vs. naive baseline (growing).
 
 ## 3. The demo story
 
-**Watchdog Inc.** is a fictional company whose vendors are the hackathon sponsors: **AWS, Nimble, Tinybird, Liquid AI, Black Forest Labs**.
+**Night's Watch Inc.** is a fictional company whose vendors are the hackathon sponsors: **AWS, Nimble, Tinybird, Liquid AI, Black Forest Labs**.
 
-1. Watchdog maps the supply chain: Watchdog Inc. → 5 vendors → their sub-processors. All green.
+1. Night's Watch maps the supply chain: Night's Watch Inc. → 5 vendors → their sub-processors. All green.
 2. It keeps watching. Most ticks: "no material change," discarded. Token chart stays flat.
-3. **Live injection:** a teammate adds a dummy sub-processor ("DataHarvest Ltd", in a country outside Watchdog's allowed list) and/or edits a privacy-policy clause to permit AI training.
+3. **Live injection:** a teammate adds a dummy sub-processor ("DataHarvest Ltd", in a country outside the company's allowed list) and/or edits a privacy-policy clause to permit AI training.
 4. Next tick: Nimble fetches → Liquid flags "material" → Bedrock checks against policy → node turns **red**:
-   > ⚠️ **Tinybird (demo mirror)** added **DataHarvest Ltd ([country])** — violates **R1: EU data residency**. Watchdog Inc. is no longer compliant.
+   > ⚠️ **Tinybird (demo mirror)** added **DataHarvest Ltd ([country])** — violates **R1: EU data residency**. Night's Watch Inc. is no longer compliant.
 
 ### Injection approach
 We can't edit real vendor pages. We **mirror one vendor's sub-processor + privacy pages to our own S3** and inject into the mirror. It is **always labeled "demo mirror" on screen** so no one mistakes it for a real change by the vendor.
 
-## 4. Watchdog Inc.'s data policy (the compliance rules)
+## 4. Night's Watch Inc.'s data policy (the compliance rules)
 
 | Rule | Description |
 |---|---|
@@ -135,7 +135,7 @@ We can't edit real vendor pages. We **mirror one vendor's sub-processor + privac
 }
 
 // tick — one row per agent step (for the token chart)
-{ "tick": 13, "agent": "watchdog|naive", "vendor": "tinybird", "input_tokens": 1450, "material": true }
+{ "tick": 13, "agent": "nights_watch|naive", "vendor": "tinybird", "input_tokens": 1450, "material": true }
 ```
 
 ## 7. Team split
@@ -163,7 +163,7 @@ We can't edit real vendor pages. We **mirror one vendor's sub-processor + privac
 - One-page dashboard:
   1. Supply-chain graph (Cytoscape.js / vis-network); nodes turn red live.
   2. Alert panel with before/after diff.
-  3. Tokens-per-tick chart: Watchdog vs. naive.
+  3. Tokens-per-tick chart: Night's Watch vs. naive.
 - Owns the demo script, pitch, and **backup screen recording**.
 
 ## 8. Timeline (4 hours)
@@ -181,7 +181,7 @@ We can't edit real vendor pages. We **mirror one vendor's sub-processor + privac
 
 ## 9. Three-minute demo script
 
-1. **(0:30) Hook:** "Watchdog Inc. runs on these five vendors — today's sponsors. But who do *they* share our data with?" Graph expands to fourth parties.
+1. **(0:30) Hook:** "Night's Watch Inc. runs on these five vendors — today's sponsors. But who do *they* share our data with?" Graph expands to fourth parties.
 2. **(0:30) Long horizon:** "We check this every hour, for months. Most checks show no change and get discarded; only changes that matter are kept." Show flat vs. growing token chart.
 3. **(1:00) Live injection:** run `inject.py`, trigger a tick. Nimble → Liquid → Bedrock → node turns red. Read the alert aloud.
 4. **(1:00) Close:** "Coris and Changeflow prove the market. Our contribution is the architecture: memory that stays accurate over months at constant cost. Next, the same engine watches merchants for payment processors."
