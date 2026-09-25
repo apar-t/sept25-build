@@ -129,6 +129,7 @@ class StateCard(BaseModel):
     subprocessors: list[Subprocessor] = []
     training_on_customer_data: bool | None = None   # None = unknown
     retention_days: int | None = None
+    clause_quotes: dict[str, str] = {}   # {"training": "...", "retention": "..."}: short evidence quotes
     open_findings: list[Finding] = []
     notes: str = ""                  # the agent's own short working notes (kept under ~600 chars)
     last_material_change_tick: int | None = None
