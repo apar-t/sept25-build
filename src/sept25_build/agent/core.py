@@ -7,7 +7,7 @@ the same size on tick 5 and tick 5,000. Full snapshots live in RawTree, never in
 import json
 import time
 
-from ..contracts import COMPANY, RULES, Alert, Snapshot, StateCard, Subprocessor, TickLog, sha
+from ..contracts import COMPANY, RULES, Alert, MemoryOp, Snapshot, StateCard, Subprocessor, TickLog, sha
 from . import llm, policy
 
 SYSTEM = (
@@ -330,6 +330,46 @@ def step(card: StateCard | None, snap: Snapshot, tick: int, run_id: str = "live"
                   card_tokens=llm.count_tokens(json.dumps(new.prompt_view(), ensure_ascii=False)),
                   latency_ms=int((time.monotonic() - t0) * 1000))
     return new, alerts, log
+
+
+def memory_ops(old: StateCard | None, new: StateCard, tick: int, run_id: str) -> list[MemoryOp]:
+    """The edits this step made to the agent's own working memory, as an auditable journal.
+
+    Everything the agent keeps, changes or forgets shows up here; noise never does (it only
+    bumps a counter), which is the point: the journal grows with change, not with time.
+    """
+    def op(kind, field, before="", after="", why=""):
+        return MemoryOp(run_id=run_id, tick=tick, vendor=new.vendor, op=kind, field=field,
+                        before=str(before)[:200], after=str(after)[:200], why=str(why)[:200])
+    ops = []
+    if old is None:
+        return [op("remember", "baseline", after=f"{len(new.subprocessors)} sub-processors, "
+                   f"{len(new.sentence_verdicts)} policy sentences judged", why="first observation")]
+    for field in ("training_on_customer_data", "retention_days", "status"):
+        a, b = getattr(old, field), getattr(new, field)
+        if a != b:
+            why = new.clause_quotes.get("training" if field.startswith("training") else "retention", "") \
+                if field != "status" else "; ".join(f.summary for f in new.open_findings)
+            ops.append(op("set", field, a, b, why))
+    subs_old = {policy.sub_key(sp): sp for sp in old.subprocessors}
+    subs_new = {policy.sub_key(sp): sp for sp in new.subprocessors}
+    ops += [op("remember", "subprocessor", after=f"{sp.name} ({sp.country})") for k, sp in subs_new.items() if k not in subs_old]
+    ops += [op("forget", "subprocessor", before=f"{sp.name} ({sp.country})", why="no longer listed; kept in ledger")
+            for k, sp in subs_old.items() if k not in subs_new]
+    ops += [op("remember", "sentence", after=v["text"], why=f"{v['kind']} verdict by {v['by']}")
+            for k, v in new.sentence_verdicts.items() if k not in old.sentence_verdicts]
+    ops += [op("forget", "sentence", before=v["text"], why="no longer in the terms")
+            for k, v in old.sentence_verdicts.items() if k not in new.sentence_verdicts]
+    f_old = {(f.rule, f.summary) for f in old.open_findings}
+    f_new = {(f.rule, f.summary) for f in new.open_findings}
+    ops += [op("open_finding", r, after=sm) for r, sm in f_new - f_old]
+    ops += [op("close_finding", r, before=sm) for r, sm in f_old - f_new]
+    if "earlier" in new.notes and new.notes != old.notes and len(old.notes.splitlines()) >= NOTES_KEEP:
+        ops.append(op("compact", "notes", before=f"{len(old.notes)} chars", after=f"{len(new.notes)} chars",
+                      why=f"kept last {NOTES_KEEP} events, folded older ones into totals"))
+    if new.counters.get("fetch_gaps", 0) > old.counters.get("fetch_gaps", 0):
+        ops.append(op("keep_on_fetch_gap", "snapshot", why="empty fetch: previous memory kept"))
+    return ops
 
 
 def naive_tokens(prev_total: int, snap: Snapshot, first: bool) -> int:
