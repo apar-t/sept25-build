@@ -43,7 +43,8 @@ def main() -> None:
             console._onboard(job, a.url)
             job.finish()
         except Exception as e:  # noqa: BLE001
-            job.finish(f"{type(e).__name__}: {str(e)[:300]}")
+            # lane B raises RuntimeError with a sentence meant for people; anything else is a bug, so name it
+            job.finish(str(e)[:300] if isinstance(e, RuntimeError) else f"{type(e).__name__}: {str(e)[:300]}")
         finally:
             done.set()
 

@@ -4,8 +4,8 @@
 //      POST /check {url}          start one (or reuse a result from the last 24 h), returns {id}
 //      GET  /check/<id>           status, live steps, and the result when done
 //      POST /check/<id>/report    progress/result from the GitHub Action (LIVE_REPO), Bearer REPORT_SECRET
-// Secrets: GITHUB_TOKEN (fine-grained: Contents read/write on GITHUB_REPO, Actions read/write on LIVE_REPO),
-//          REPORT_SECRET (shared with LIVE_REPO's Actions secrets).
+// Secrets: GITHUB_TOKEN (fine-grained: Contents read/write on GITHUB_REPO), LIVE_TOKEN (fine-grained: Actions
+//          read/write on LIVE_REPO; falls back to GITHUB_TOKEN), REPORT_SECRET (shared with LIVE_REPO's Actions secrets).
 const MAX = {name: 200, email: 200, message: 5000};
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -31,7 +31,7 @@ function b64(s) {
 
 const REUSE_MS = 24 * 3600e3, STALE_MS = 8 * 60e3, PER_HOUR = 20;
 const gh = (env, path, init = {}) => fetch(`${env.GITHUB_API}${path}`, {...init, headers: {
-  'Authorization': `Bearer ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github+json',
+  'Authorization': `Bearer ${env.LIVE_TOKEN || env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github+json',
   'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'nights-watch-live', ...(init.headers || {})}});
 
 // "Stripe.com/legal/" -> {url: "https://stripe.com/legal", key: "stripe.com/legal"}; null if it isn't a plain public site
