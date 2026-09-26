@@ -5,4 +5,10 @@ compatibility_date = "2026-09-01"
 [vars]
 GITHUB_REPO = "vroy2008/nights-watch-contacts"
 GITHUB_API = "https://api.github.com"
+LIVE_REPO = "vroy2008/nights-watch-live"
 ALLOWED_ORIGINS = "https://nightswatch.app,https://vroy2008.github.io,http://localhost:8780"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nights-watch-live"
+database_id = "b64f8379-44a5-4321-9cd6-22356e5bbd83"

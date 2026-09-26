@@ -22,3 +22,12 @@ Two static replays of one real recorded run (`demo.json`), so they need no serve
 - `demo.html` (nightswatch.app/demo.html): lane B's app page (`src/sept25_build/agent/ui/app.html`), built by `python3 web/build_app_demo.py`. Connect, setup, watching, then simulate: add sub-processor, then AI-training clause, then undo (the order the run recorded).
 - `guided.html`: the four-step guided console (`console.html`), built by `python3 web/build_demo.py`.
 Both builders fail loudly if an anchor they edit moved. Regenerate the recording from a rehearsal run with `NW_TABLE_SUFFIX=_e2e uv run python web/export_demo.py` (read-only; checks #2-#6), rebuild, then publish.
+
+## Live company checks
+On `demo.html`, our demo company replays the recording; any other website is checked live:
+page -> `POST /check` on the contact Worker (`contact-worker/`) -> GitHub Actions in the private repo `vroy2008/nights-watch-live` runs lane B's check (`live/run_check.py`, Nimble only) -> reports progress and the result to `POST /check/<id>/report` -> D1 database `nights-watch-live` (`contact-worker/schema.sql`) -> page polls `GET /check/<id>`.
+- The same site checked again within 24 h reuses the stored result. At most 20 new checks per hour. A check takes about 15-60 s.
+- Secrets: the Worker's `GITHUB_TOKEN` needs Actions read/write on `vroy2008/nights-watch-live` (plus Contents on the contacts repo); `REPORT_SECRET` is shared by the Worker and that repo; `NIMBLE_API_KEY` is a secret on that repo.
+- After lane B changes the check, run `bash web/live/sync.sh` to copy the code into that repo.
+- Results: `npx wrangler d1 execute nights-watch-live --remote --command "SELECT host, status, datetime(created_at/1000,'unixepoch') FROM checks ORDER BY created_at DESC LIMIT 20"` (from `web/contact-worker`).
+

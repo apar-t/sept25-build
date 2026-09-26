@@ -1,0 +1,34 @@
+# Live company check: the Worker starts this run, it reads the company's sub-processor list through Nimble
+# (lane B's check, run_check.py) and reports progress and the result back to the Worker, which stores them in D1.
+# Source of truth: sept25-build/web/live/check.yml (copied here by web/live/sync.sh).
+name: check
+run-name: check ${{ inputs.url }}
+on:
+  workflow_dispatch:
+    inputs:
+      url: {description: Company website, required: true}
+      id: {description: Check id from the Worker, required: true}
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      CHECK_URL: ${{ inputs.url }}
+      REPORT_URL: https://nights-watch-contact.venkatsr12.workers.dev/check/${{ inputs.id }}/report
+      REPORT_SECRET: ${{ secrets.REPORT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: {enable-cache: true}
+      - run: uv sync --frozen --no-dev
+      - name: Check the company
+        env:
+          NIMBLE_API_KEY: ${{ secrets.NIMBLE_API_KEY }}
+        run: uv run python run_check.py "$CHECK_URL" --report "$REPORT_URL"
+      - name: Tell the page it failed
+        if: failure() || cancelled()
+        run: >
+          curl -s -X POST -H "Authorization: Bearer $REPORT_SECRET" -H 'Content-Type: application/json'
+          -d '{"status":"failed","error":"The check stopped on GitHub before it finished."}' "$REPORT_URL"
